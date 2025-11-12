@@ -1,0 +1,226 @@
+# Project Configuration
+project:
+  name: "hybrid-sentiment-analysis"
+  description: "Sentiment analysis using deep embeddings + classical ML"
+  random_seed: 42
+  device: "cpu"  # cuda, cpu, or mps (for Mac)
+
+# Dataset Configuration
+data:
+  dataset_name: "imdb"  # options: imdb, twitter, custom
+  data_dir: "data/raw"
+  processed_dir: "data/processed"
+  embeddings_dir: "data/embeddings"
+  
+  # Data splits
+  test_split: 0.2
+  validation_split: 0.1
+  
+  # Sequence parameters
+  max_length: 256
+  vocab_size: 20000  # Maximum vocabulary size
+  
+  # Sampling (for faster experimentation)
+  sample_size: null  # null for full dataset, or specify number like 10000
+
+# Text Preprocessing
+preprocessing:
+  lowercase: true
+  remove_punctuation: true
+  remove_stopwords: false
+  remove_html: true
+  remove_urls: true
+  remove_mentions: true  # For Twitter data
+  remove_hashtags: false
+  min_word_freq: 2
+  tokenizer: "word"  # options: word, subword, char
+
+# Word Embeddings
+word_embeddings:
+  use_pretrained: false
+  pretrained_type: "glove"  # options: glove, word2vec, fasttext
+  pretrained_path: null
+  embedding_dim: 300
+  train_embeddings: true  # Fine-tune embeddings during training
+
+# Deep Learning Encoder Models
+deep_learning:
+  # LSTM Configuration
+  lstm:
+    embedding_dim: 300
+    hidden_dim: 128
+    num_layers: 2
+    dropout: 0.3
+    bidirectional: true
+    
+  # GRU Configuration
+  gru:
+    embedding_dim: 300
+    hidden_dim: 128
+    num_layers: 2
+    dropout: 0.3
+    bidirectional: true
+  
+  # Transformer Configuration
+  transformer:
+    embedding_dim: 300
+    num_heads: 6
+    num_layers: 3
+    dim_feedforward: 512
+    dropout: 0.1
+    
+  # BERT Configuration
+  bert:
+    model_name: "bert-base-uncased"
+    max_length: 256
+    freeze_layers: 6  # Number of layers to freeze (-1 for none)
+
+# Training Configuration
+training:
+  # General
+  batch_size: 32
+  epochs: 10
+  learning_rate: 0.001
+  optimizer: "adam"  # options: adam, sgd, adamw
+  scheduler: "step"  # options: step, cosine, plateau, none
+  
+  # Optimizer parameters
+  weight_decay: 0.0001
+  momentum: 0.9  # For SGD
+  
+  # Scheduler parameters
+  step_size: 5
+  gamma: 0.1
+  
+  # Early stopping
+  early_stopping: true
+  patience: 3
+  min_delta: 0.001
+  
+  # Gradient clipping
+  gradient_clipping: true
+  max_grad_norm: 1.0
+  
+  # Checkpointing
+  save_best_only: true
+  save_frequency: 1  # Save every N epochs
+
+# Classical ML Models
+classical_ml:
+  # Models to train
+  models:
+    - logistic_regression
+    - random_forest
+    - xgboost
+    - svm
+  
+  # Hyperparameter tuning
+  hyperparameter_tuning: true
+  cv_folds: 5
+  n_iter: 20  # For RandomizedSearchCV
+  
+  # Logistic Regression
+  logistic_regression:
+    C: [0.01, 0.1, 1, 10, 100]
+    penalty: ["l1", "l2"]
+    solver: ["liblinear", "saga"]
+    max_iter: 1000
+  
+  # Random Forest
+  random_forest:
+    n_estimators: [100, 200, 300]
+    max_depth: [10, 20, 30, null]
+    min_samples_split: [2, 5, 10]
+    min_samples_leaf: [1, 2, 4]
+    max_features: ["sqrt", "log2"]
+  
+  # XGBoost
+  xgboost:
+    n_estimators: [100, 200, 300]
+    max_depth: [3, 5, 7]
+    learning_rate: [0.01, 0.1, 0.3]
+    subsample: [0.8, 1.0]
+    colsample_bytree: [0.8, 1.0]
+    
+  # SVM
+  svm:
+    C: [0.1, 1, 10]
+    kernel: ["linear", "rbf"]
+    gamma: ["scale", "auto"]
+
+# Evaluation Metrics
+evaluation:
+  metrics:
+    - accuracy
+    - precision
+    - recall
+    - f1_score
+    - roc_auc
+    - confusion_matrix
+  
+  # Visualization
+  plot_confusion_matrix: true
+  plot_roc_curve: true
+  plot_learning_curves: true
+  
+  # Save predictions
+  save_predictions: true
+  save_probabilities: true
+
+# Embedding Visualization
+visualization:
+  enabled: true
+  methods:
+    - tsne
+    - pca
+    - umap
+  
+  # t-SNE parameters
+  tsne:
+    n_components: 2
+    perplexity: 30
+    n_iter: 1000
+    
+  # PCA parameters
+  pca:
+    n_components: 2
+    
+  # UMAP parameters
+  umap:
+    n_components: 2
+    n_neighbors: 15
+    min_dist: 0.1
+  
+  # Sampling for visualization (to avoid cluttered plots)
+  sample_size: 5000
+
+# Output Paths
+paths:
+  models: "results/models"
+  plots: "results/plots"
+  metrics: "results/metrics"
+  logs: "logs"
+  embeddings: "data/embeddings"
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_to_file: true
+  log_to_console: true
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Experiments
+experiments:
+  # Compare different embedding methods
+  compare_embeddings: true
+  embedding_types:
+    - lstm
+    - gru
+    - bert
+    - word2vec
+  
+  # Compare classical ML vs end-to-end DL
+  compare_approaches: true
+  
+  # Feature importance analysis
+  feature_importance: true
