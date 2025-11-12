@@ -135,6 +135,7 @@ classical_ml:
     penalty: ["l1", "l2"]
     solver: ["liblinear", "saga"]
     max_iter: 1000
+    normalize: true
   
   # Random Forest
   random_forest:
