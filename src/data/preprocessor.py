@@ -102,13 +102,12 @@ class TextPreprocessor:
             # Remove just the # symbol but keep the word
             text = re.sub(r'#', '', text)
         
-        # Remove numbers (optional - you can make this configurable)
-        # text = re.sub(r'\d+', '', text)
-        
         # Lowercase
         if self.lowercase:
             text = text.lower()
         
+        text = re.sub(r'([.,!?;:\-\'\"])', r' \1 ', text)
+
         # Remove punctuation
         if self.remove_punctuation:
             text = text.translate(str.maketrans('', '', string.punctuation))
@@ -132,7 +131,7 @@ class TextPreprocessor:
             tokens = word_tokenize(text)
         elif self.tokenizer_type == 'simple':
             # Simple whitespace tokenization
-            tokens = text.split()
+            tokens = re.findall(r"\b\w+(?:'\w+)?\b", text)
         elif self.tokenizer_type == 'char':
             # Character-level tokenization
             tokens = list(text)
@@ -144,7 +143,7 @@ class TextPreprocessor:
             tokens = [token for token in tokens if token.lower() not in self.stop_words]
         
         # Remove empty tokens
-        tokens = [token for token in tokens if token.strip()]
+        tokens = [token for token in tokens if token.strip() and not all(c in string.punctuation for c in token)]
         
         return tokens
     
