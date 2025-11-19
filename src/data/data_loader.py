@@ -241,31 +241,47 @@ class DatasetLoader:
         Returns:
             train_df, val_df, test_df
         """
-        if use_cache and self._cache_exists():
-            return self._load_from_cache()
+        # Use dataset-specific cache file
+        cache_file = os.path.join(self.data_config['processed_dir'], 'twitter_cache.pkl')
         
-        print("Loading Twitter sentiment140 dataset...")
-        dataset = load_dataset("sentiment140", split='train')
+        if use_cache and os.path.exists(cache_file):
+            with open(cache_file, 'rb') as f:
+                cache_data = pickle.load(f)
+            print(f"Loaded dataset from cache: {cache_file}")
+            return cache_data['train'], cache_data['val'], cache_data['test']
         
-        # Convert to binary sentiment (0: negative, 1: positive)
-        # Original: 0 = negative, 2 = neutral, 4 = positive
-        df = pd.DataFrame({
-            'text': dataset['text'],
-            'label': [0 if label == 0 else 1 for label in dataset['sentiment']]
-        })
+        print("Loading Twitter tweet_eval sentiment dataset...")
         
-        # Remove neutral sentiments if they exist
-        df = df[df['label'].isin([0, 1])]
+        # Use tweet_eval/sentiment (more modern, ~60k tweets)
+        dataset = load_dataset("tweet_eval", "sentiment")
+        
+        # Combine all splits
+        all_data = []
+        for split_name in ['train', 'validation', 'test']:
+            split_df = pd.DataFrame({
+                'text': dataset[split_name]['text'],
+                'label': dataset[split_name]['label']
+            })
+            all_data.append(split_df)
+        
+        combined_df = pd.concat(all_data, ignore_index=True)
+        
+        # tweet_eval labels: 0=negative, 1=neutral, 2=positive
+        # Convert to binary: keep 0 and 2, remove 1 (neutral)
+        combined_df = combined_df[combined_df['label'].isin([0, 2])]
+        combined_df['label'] = combined_df['label'].apply(lambda x: 0 if x == 0 else 1)
+        
+        print(f"Total tweets after removing neutral: {len(combined_df)}")
         
         # Split into train, val, test
         test_split = self.data_config['test_split']
         val_split = self.data_config['validation_split']
         
         train_val_df, test_df = train_test_split(
-            df, 
+            combined_df, 
             test_size=test_split, 
             random_state=self.random_seed,
-            stratify=df['label']
+            stratify=combined_df['label']
         )
         
         train_df, val_df = train_test_split(
@@ -288,7 +304,14 @@ class DatasetLoader:
         
         # Cache the dataset
         if use_cache:
-            self._save_to_cache(train_df, val_df, test_df)
+            cache_data = {
+                'train': train_df,
+                'val': val_df,
+                'test': test_df
+            }
+            with open(cache_file, 'wb') as f:
+                pickle.dump(cache_data, f)
+            print(f"Saved dataset to cache: {cache_file}")
         
         print(f"Train size: {len(train_df)}, Val size: {len(val_df)}, Test size: {len(test_df)}")
         
