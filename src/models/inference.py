@@ -61,31 +61,130 @@ class HybridSentimentPredictor:
         # Load checkpoint
         checkpoint = torch.load(self.encoder_path, map_location=self.device)
         
-        # Get model config
+        # Infer model type from file path if not in checkpoint
+        model_type = checkpoint.get('model_type')
+        if not model_type:
+            path_lower = str(self.encoder_path).lower()
+            if 'gru' in path_lower:
+                model_type = 'gru'
+            elif 'transformer' in path_lower:
+                model_type = 'transformer'
+            elif 'lstm' in path_lower:
+                model_type = 'lstm'
+            else:
+                raise ValueError(f"Cannot determine model type from path: {self.encoder_path}")
+        
+        print(f"  Model type: {model_type}")
+
+        # Get config from checkpoint or use defaults
         model_config = checkpoint.get('config', {})
-        model_type = checkpoint.get('model_type', 'lstm')
+
+        # If config is empty, infer from model_state_dict
+        if not model_config:
+            state_dict = checkpoint['model_state_dict']
+            # Infer vocab_size from embedding layer
+            embedding_key = 'encoder.embedding.weight'
+            if embedding_key in state_dict:
+                vocab_size, embedding_dim = state_dict[embedding_key].shape
+                # Infer hidden_dim from first RNN layer
+                if model_type in ['lstm', 'gru']:
+                    rnn_key = f'encoder.{model_type}.weight_hh_l0'
+                    if rnn_key in state_dict:
+                        hidden_dim = state_dict[rnn_key].shape[0] // (4 if model_type == 'lstm' else 3)
+                    else:
+                        hidden_dim = 256  # default
+                else:
+                    hidden_dim = 256
+                
+                # Count layers
+                layer_keys = [k for k in state_dict.keys() if f'encoder.{model_type}.weight_hh_l' in k and '_reverse' not in k]
+                num_layers = len(layer_keys)
+                
+                model_config = {
+                    'vocab_size': vocab_size,
+                    'embedding_dim': embedding_dim,
+                    'hidden_dim': hidden_dim,
+                    'num_layers': num_layers,
+                    'dropout': 0.5
+                }
+                print(f"  Inferred config: {model_config}")
         
         # Initialize encoder
         if model_type == 'lstm':
-            from src.models.deep_learning.lstm_encoder import create_lstm_classifier_from_config
-            self.encoder = create_lstm_classifier_from_config(model_config)
+            self.encoder = LSTMClassifier(
+                vocab_size=model_config['vocab_size'],
+                embedding_dim=model_config['embedding_dim'],
+                hidden_dim=model_config['hidden_dim'],
+                num_layers=model_config['num_layers'],
+                dropout=model_config.get('dropout', 0.5)
+            )
         elif model_type == 'gru':
-            from src.models.deep_learning.gru_encoder import create_gru_classifier_from_config
-            self.encoder = create_gru_classifier_from_config(model_config)
+            self.encoder = GRUClassifier(
+                vocab_size=model_config['vocab_size'],
+                embedding_dim=model_config['embedding_dim'],
+                hidden_dim=model_config['hidden_dim'],
+                num_layers=model_config['num_layers'],
+                dropout=model_config.get('dropout', 0.5)
+            )
         elif model_type == 'transformer':
-            from src.models.deep_learning.transformer_encoder import create_transformer_classifier_from_config
-            self.encoder = create_transformer_classifier_from_config(model_config)
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
+            self.encoder = TransformerClassifier(
+                vocab_size=model_config['vocab_size'],
+                embedding_dim=model_config['embedding_dim'],
+                num_heads=model_config.get('num_heads', 8),
+                num_layers=model_config['num_layers'],
+                dropout=model_config.get('dropout', 0.1)
+            )
         
         # Load weights
         self.encoder.load_state_dict(checkpoint['model_state_dict'])
         self.encoder.to(self.device)
         self.encoder.eval()
         
-        # Store vocab
+        # Store vocab (if available)
         self.vocab = checkpoint.get('vocab', {})
         self.word_to_idx = checkpoint.get('word_to_idx', self.vocab)
+
+        # If no vocab in checkpoint, try loading from embeddings folder
+        if not self.word_to_idx:
+            print("  [!] No vocab in checkpoint, loading from embeddings...")
+            # Infer dataset from path
+            if 'imdb' in str(self.encoder_path).lower():
+                vocab_path = Path('results/embeddings/imdb/word2vec/vocab.pkl')
+            elif 'twitter' in str(self.encoder_path).lower():
+                vocab_path = Path('results/embeddings/twitter/word2vec/vocab.pkl')
+            else:
+                raise ValueError("Cannot determine dataset from encoder path")
+            
+            if vocab_path.exists():
+                with open(vocab_path, 'rb') as f:
+                    vocab_data = pickle.load(f)
+
+                    # vocab_data is a list of tuples: [('word', count), ('config', {...})]
+                    # Extract just the word counts
+                    if isinstance(vocab_data, dict) and 'vocab' in vocab_data:
+                        word_counts = vocab_data['vocab']
+                        
+                        # Build word_to_idx from word counts (sorted by frequency)
+                        sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
+                        
+                        # Add special tokens
+                        self.word_to_idx = {
+                            '<PAD>': 0,
+                            '<UNK>': 1,
+                            '<START>': 2,
+                            '<END>': 3
+                        }
+                        
+                        # Add words (limit to vocab_size from model config)
+                        max_vocab = model_config.get('vocab_size', 20000) - 4  # -4 for special tokens
+                        for idx, (word, count) in enumerate(sorted_words[:max_vocab], start=4):
+                            self.word_to_idx[word] = idx
+                    else:
+                        raise ValueError(f"Unexpected vocab format in {vocab_path}")
+                        
+                print(f"  ✓ Loaded vocab from {vocab_path}")
+            else:
+                raise ValueError(f"Vocab file not found: {vocab_path}")
         
         print(f"  ✓ Encoder loaded: {model_type}")
         print(f"  Vocab size: {len(self.word_to_idx)}")
@@ -94,11 +193,30 @@ class HybridSentimentPredictor:
         """Load the classical ML classifier."""
         print(f"Loading classifier from {self.classifier_path}...")
         
-        with open(self.classifier_path, 'rb') as f:
-            self.classifier = pickle.load(f)
+        classifier_name = self.classifier_path.stem.lower()
         
-        classifier_name = type(self.classifier).__name__
-        print(f"  ✓ Classifier loaded: {classifier_name}")
+        # XGBoost uses native format, not pickle
+        if 'xgboost' in classifier_name:
+            import xgboost as xgb
+            self.classifier = xgb.XGBClassifier()
+            try:
+                # Try XGBoost native JSON format
+                self.classifier.load_model(str(self.classifier_path))
+                print(f"  ✓ Classifier loaded: XGBoost (native format)")
+            except Exception as e:
+                print(f"  [!] Native load failed: {e}")
+                # Try pickle with binary mode
+                try:
+                    with open(self.classifier_path, 'rb') as f:
+                        self.classifier = pickle.load(f, encoding='latin1')
+                    print(f"  ✓ Classifier loaded: XGBoost (pickle)")
+                except Exception as e2:
+                    raise ValueError(f"Failed to load XGBoost: {e2}")
+        else:
+            # Random Forest and Logistic Regression use pickle
+            with open(self.classifier_path, 'rb') as f:
+                self.classifier = pickle.load(f)
+            print(f"  ✓ Classifier loaded: {type(self.classifier).__name__}")
     
     def _text_to_indices(self, text: str, max_len: int = 256) -> torch.Tensor:
         """
