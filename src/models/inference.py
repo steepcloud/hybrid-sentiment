@@ -195,28 +195,22 @@ class HybridSentimentPredictor:
         
         classifier_name = self.classifier_path.stem.lower()
         
-        # XGBoost uses native format, not pickle
-        if 'xgboost' in classifier_name:
-            import xgboost as xgb
-            self.classifier = xgb.XGBClassifier()
-            try:
-                # Try XGBoost native JSON format
-                self.classifier.load_model(str(self.classifier_path))
-                print(f"  ✓ Classifier loaded: XGBoost (native format)")
-            except Exception as e:
-                print(f"  [!] Native load failed: {e}")
-                # Try pickle with binary mode
-                try:
-                    with open(self.classifier_path, 'rb') as f:
-                        self.classifier = pickle.load(f, encoding='latin1')
-                    print(f"  ✓ Classifier loaded: XGBoost (pickle)")
-                except Exception as e2:
-                    raise ValueError(f"Failed to load XGBoost: {e2}")
-        else:
-            # Random Forest and Logistic Regression use pickle
-            with open(self.classifier_path, 'rb') as f:
-                self.classifier = pickle.load(f)
+        # Load with joblib (all classifiers use this format)
+        try:
+            import joblib
+            model_data = joblib.load(self.classifier_path)
+            
+            # Extract the actual model from the dict
+            if isinstance(model_data, dict) and 'model' in model_data:
+                self.classifier = model_data['model']
+            else:
+                # Fallback: assume it's the model directly
+                self.classifier = model_data
+            
             print(f"  ✓ Classifier loaded: {type(self.classifier).__name__}")
+            
+        except Exception as e:
+            raise ValueError(f"Failed to load classifier from {self.classifier_path}: {e}")
     
     def _text_to_indices(self, text: str, max_len: int = 256) -> torch.Tensor:
         """
@@ -230,7 +224,7 @@ class HybridSentimentPredictor:
             Tensor of shape (1, max_len)
         """
         # Preprocess text
-        tokens = self.preprocessor.preprocess(text)
+        tokens = self.preprocessor.tokenize(text)
         
         # Convert to indices
         indices = [self.word_to_idx.get(token, self.word_to_idx.get('<UNK>', 1)) 
@@ -259,7 +253,7 @@ class HybridSentimentPredictor:
         
         # Extract features
         with torch.no_grad():
-            features = self.encoder.encode(indices)
+            features = self.encoder.get_embeddings(indices)
         
         return features.cpu().numpy().flatten()
     
@@ -279,11 +273,17 @@ class HybridSentimentPredictor:
         """
         start_time = time.time()
         
+        print(f"\n🔍 INFERENCE DEBUG:")
+        print(f"   Input text: {text}")
+        
         # Extract features
         features = self._extract_features(text)
+        print(f"   Features shape: {features.shape}")
+        print(f"   Features sample (first 10): {features[:10]}")
         
         # Predict with classifier
         prediction = self.classifier.predict([features])[0]
+        print(f"   Raw prediction: {prediction} (0=negative, 1=positive)")
         
         # Get probabilities if available
         if hasattr(self.classifier, 'predict_proba'):
@@ -292,11 +292,18 @@ class HybridSentimentPredictor:
             # For models without predict_proba, use binary prediction
             probabilities = [1 - prediction, prediction]
         
+        print(f"   Probabilities: {probabilities}")
+        print(f"   Probability[0] (negative): {probabilities[0]:.4f}")
+        print(f"   Probability[1] (positive): {probabilities[1]:.4f}")
+        
         processing_time = (time.time() - start_time) * 1000  # Convert to ms
         
         sentiment = 'positive' if prediction == 1 else 'negative'
         confidence = max(probabilities)
         
+        print(f"   Final sentiment: {sentiment}")
+        print(f"   Final confidence: {confidence:.4f}\n")
+
         return {
             'sentiment': sentiment,
             'confidence': float(confidence),
@@ -387,36 +394,131 @@ class EndToEndPredictor:
     
     def _load_model(self):
         """Load the end-to-end model."""
+        print(f"Loading end-to-end model from {self.model_path}...")
+        
         checkpoint = torch.load(self.model_path, map_location=self.device)
         
+        # Infer model type from file path if not in checkpoint
+        model_type = checkpoint.get('model_type')
+        if not model_type:
+            path_lower = str(self.model_path).lower()
+            if 'gru' in path_lower:
+                model_type = 'gru'
+            elif 'transformer' in path_lower:
+                model_type = 'transformer'
+            elif 'lstm' in path_lower:
+                model_type = 'lstm'
+            else:
+                raise ValueError(f"Cannot determine model type from path: {self.model_path}")
+        
+        print(f"  Model type: {model_type}")
+        
+        # Get config from checkpoint or infer it
         model_config = checkpoint.get('config', {})
-        model_type = checkpoint.get('model_type', 'lstm')
+        
+        # If config is empty, infer from model_state_dict (same logic as HybridSentimentPredictor)
+        if not model_config:
+            state_dict = checkpoint['model_state_dict']
+            embedding_key = 'encoder.embedding.weight'
+            if embedding_key in state_dict:
+                vocab_size, embedding_dim = state_dict[embedding_key].shape
+                
+                if model_type in ['lstm', 'gru']:
+                    rnn_key = f'encoder.{model_type}.weight_hh_l0'
+                    if rnn_key in state_dict:
+                        hidden_dim = state_dict[rnn_key].shape[0] // (4 if model_type == 'lstm' else 3)
+                    else:
+                        hidden_dim = 256
+                else:
+                    hidden_dim = 256
+                
+                layer_keys = [k for k in state_dict.keys() if f'encoder.{model_type}.weight_hh_l' in k and '_reverse' not in k]
+                num_layers = len(layer_keys)
+                
+                model_config = {
+                    'vocab_size': vocab_size,
+                    'embedding_dim': embedding_dim,
+                    'hidden_dim': hidden_dim,
+                    'num_layers': num_layers,
+                    'dropout': 0.5
+                }
+                print(f"  Inferred config: {model_config}")
         
         # Initialize model
         if model_type == 'lstm':
-            from src.models.deep_learning.lstm_encoder import create_lstm_classifier_from_config
-            self.model = create_lstm_classifier_from_config(model_config)
+            self.model = LSTMClassifier(
+                vocab_size=model_config['vocab_size'],
+                embedding_dim=model_config['embedding_dim'],
+                hidden_dim=model_config['hidden_dim'],
+                num_layers=model_config['num_layers'],
+                dropout=model_config.get('dropout', 0.5)
+            )
         elif model_type == 'gru':
-            from src.models.deep_learning.gru_encoder import create_gru_classifier_from_config
-            self.model = create_gru_classifier_from_config(model_config)
+            self.model = GRUClassifier(
+                vocab_size=model_config['vocab_size'],
+                embedding_dim=model_config['embedding_dim'],
+                hidden_dim=model_config['hidden_dim'],
+                num_layers=model_config['num_layers'],
+                dropout=model_config.get('dropout', 0.5)
+            )
         elif model_type == 'transformer':
-            from src.models.deep_learning.transformer_encoder import create_transformer_classifier_from_config
-            self.model = create_transformer_classifier_from_config(model_config)
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
+            self.model = TransformerClassifier(
+                vocab_size=model_config['vocab_size'],
+                embedding_dim=model_config['embedding_dim'],
+                num_heads=model_config.get('num_heads', 8),
+                num_layers=model_config['num_layers'],
+                dropout=model_config.get('dropout', 0.1)
+            )
         
         # Load weights
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.to(self.device)
         self.model.eval()
         
-        # Store vocab
+        # Load vocab (same logic as HybridSentimentPredictor)
         self.vocab = checkpoint.get('vocab', {})
         self.word_to_idx = checkpoint.get('word_to_idx', self.vocab)
+        
+        if not self.word_to_idx:
+            print("  [!] No vocab in checkpoint, loading from embeddings...")
+            if 'imdb' in str(self.model_path).lower():
+                vocab_path = Path('results/embeddings/imdb/word2vec/vocab.pkl')
+            elif 'twitter' in str(self.model_path).lower():
+                vocab_path = Path('results/embeddings/twitter/word2vec/vocab.pkl')
+            else:
+                raise ValueError("Cannot determine dataset from model path")
+            
+            if vocab_path.exists():
+                with open(vocab_path, 'rb') as f:
+                    vocab_data = pickle.load(f)
+                    
+                    if isinstance(vocab_data, dict) and 'vocab' in vocab_data:
+                        word_counts = vocab_data['vocab']
+                        sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
+                        
+                        self.word_to_idx = {
+                            '<PAD>': 0,
+                            '<UNK>': 1,
+                            '<START>': 2,
+                            '<END>': 3
+                        }
+                        
+                        max_vocab = model_config.get('vocab_size', 20000) - 4
+                        for idx, (word, count) in enumerate(sorted_words[:max_vocab], start=4):
+                            self.word_to_idx[word] = idx
+                    else:
+                        raise ValueError(f"Unexpected vocab format in {vocab_path}")
+                
+                print(f"  ✓ Loaded vocab from {vocab_path}")
+            else:
+                raise ValueError(f"Vocab file not found: {vocab_path}")
+        
+        print(f"  ✓ Model loaded: {model_type}")
+        print(f"  Vocab size: {len(self.word_to_idx)}")
     
     def _text_to_indices(self, text: str, max_len: int = 256) -> torch.Tensor:
         """Convert text to indices."""
-        tokens = self.preprocessor.preprocess(text)
+        tokens = self.preprocessor.tokenize(text)
         
         indices = [self.word_to_idx.get(token, self.word_to_idx.get('<UNK>', 1)) 
                    for token in tokens[:max_len]]
@@ -443,7 +545,7 @@ class EndToEndPredictor:
         
         processing_time = (time.time() - start_time) * 1000
         
-        sentiment = 'positive' if prediction == 1 else 'negative'
+        sentiment = 'negative' if prediction == 1 else 'positive'
         confidence = float(probabilities[prediction])
         
         return {
