@@ -82,21 +82,18 @@ class HybridSentimentPredictor:
         # If config is empty, infer from model_state_dict
         if not model_config:
             state_dict = checkpoint['model_state_dict']
-            # Infer vocab_size from embedding layer
             embedding_key = 'encoder.embedding.weight'
             if embedding_key in state_dict:
                 vocab_size, embedding_dim = state_dict[embedding_key].shape
-                # Infer hidden_dim from first RNN layer
                 if model_type in ['lstm', 'gru']:
                     rnn_key = f'encoder.{model_type}.weight_hh_l0'
                     if rnn_key in state_dict:
                         hidden_dim = state_dict[rnn_key].shape[0] // (4 if model_type == 'lstm' else 3)
                     else:
-                        hidden_dim = 256  # default
+                        hidden_dim = 256
                 else:
                     hidden_dim = 256
                 
-                # Count layers
                 layer_keys = [k for k in state_dict.keys() if f'encoder.{model_type}.weight_hh_l' in k and '_reverse' not in k]
                 num_layers = len(layer_keys)
                 
@@ -144,10 +141,9 @@ class HybridSentimentPredictor:
         self.vocab = checkpoint.get('vocab', {})
         self.word_to_idx = checkpoint.get('word_to_idx', self.vocab)
 
-        # If no vocab in checkpoint, try loading from embeddings folder
+        # If no vocab in checkpoint, load from embeddings folder
         if not self.word_to_idx:
             print("  [!] No vocab in checkpoint, loading from embeddings...")
-            # Infer dataset from path
             if 'imdb' in str(self.encoder_path).lower():
                 vocab_path = Path('results/embeddings/imdb/word2vec/vocab.pkl')
             elif 'twitter' in str(self.encoder_path).lower():
@@ -158,27 +154,10 @@ class HybridSentimentPredictor:
             if vocab_path.exists():
                 with open(vocab_path, 'rb') as f:
                     vocab_data = pickle.load(f)
-
-                    # vocab_data is a list of tuples: [('word', count), ('config', {...})]
-                    # Extract just the word counts
+                    
+                    # FIX: vocab_data['vocab'] IS the word_to_idx mapping!
                     if isinstance(vocab_data, dict) and 'vocab' in vocab_data:
-                        word_counts = vocab_data['vocab']
-                        
-                        # Build word_to_idx from word counts (sorted by frequency)
-                        sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
-                        
-                        # Add special tokens
-                        self.word_to_idx = {
-                            '<PAD>': 0,
-                            '<UNK>': 1,
-                            '<START>': 2,
-                            '<END>': 3
-                        }
-                        
-                        # Add words (limit to vocab_size from model config)
-                        max_vocab = model_config.get('vocab_size', 20000) - 4  # -4 for special tokens
-                        for idx, (word, count) in enumerate(sorted_words[:max_vocab], start=4):
-                            self.word_to_idx[word] = idx
+                        self.word_to_idx = vocab_data['vocab']
                     else:
                         raise ValueError(f"Unexpected vocab format in {vocab_path}")
                         
@@ -493,19 +472,7 @@ class EndToEndPredictor:
                     vocab_data = pickle.load(f)
                     
                     if isinstance(vocab_data, dict) and 'vocab' in vocab_data:
-                        word_counts = vocab_data['vocab']
-                        sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
-                        
-                        self.word_to_idx = {
-                            '<PAD>': 0,
-                            '<UNK>': 1,
-                            '<START>': 2,
-                            '<END>': 3
-                        }
-                        
-                        max_vocab = model_config.get('vocab_size', 20000) - 4
-                        for idx, (word, count) in enumerate(sorted_words[:max_vocab], start=4):
-                            self.word_to_idx[word] = idx
+                        self.word_to_idx = vocab_data['vocab']
                     else:
                         raise ValueError(f"Unexpected vocab format in {vocab_path}")
                 
@@ -520,8 +487,18 @@ class EndToEndPredictor:
         """Convert text to indices."""
         tokens = self.preprocessor.tokenize(text)
         
+        print(f"🔍 TOKENIZATION DEBUG:")
+        print(f"   Raw text: {text}")
+        print(f"   Tokens: {tokens[:20]}")
+        
         indices = [self.word_to_idx.get(token, self.word_to_idx.get('<UNK>', 1)) 
                    for token in tokens[:max_len]]
+        
+        print(f"   Indices (first 20): {indices[:20]}")
+        print(f"   Vocab check - 'love': {self.word_to_idx.get('love', 'NOT FOUND')}")
+        print(f"   Vocab check - 'trash': {self.word_to_idx.get('trash', 'NOT FOUND')}")
+        print(f"   Vocab check - '<PAD>': {self.word_to_idx.get('<PAD>', 'NOT FOUND')}")
+        print(f"   Vocab check - '<UNK>': {self.word_to_idx.get('<UNK>', 'NOT FOUND')}\n")
         
         if len(indices) < max_len:
             indices += [self.word_to_idx.get('<PAD>', 0)] * (max_len - len(indices))
@@ -544,8 +521,16 @@ class EndToEndPredictor:
             prediction = np.argmax(probabilities)
         
         processing_time = (time.time() - start_time) * 1000
+
+        # DEBUG: Print raw values
+        print(f"\n🔍 END-TO-END DEBUG:")
+        print(f"   Text: {text}")
+        print(f"   Logits: {logits.cpu().numpy()[0]}")
+        print(f"   Probabilities: {probabilities}")
+        print(f"   Prediction (argmax): {prediction}")
+        print(f"   Prob[0]: {probabilities[0]:.4f}, Prob[1]: {probabilities[1]:.4f}\n")
         
-        sentiment = 'negative' if prediction == 1 else 'positive'
+        sentiment = 'positive' if prediction == 1 else 'negative'
         confidence = float(probabilities[prediction])
         
         return {

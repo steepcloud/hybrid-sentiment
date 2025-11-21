@@ -135,6 +135,18 @@ class EndToEndDLTrainer:
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
         
+        # Better weight initialization for classifier head
+        def init_classifier_weights(m):
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+        
+        # Apply to classifier only (not encoder/embeddings)
+        if hasattr(model, 'classifier'):
+            model.classifier.apply(init_classifier_weights)
+            print("  ✓ Applied Xavier initialization to classifier")
+            
         model = model.to(self.device)
         
         # Print model info

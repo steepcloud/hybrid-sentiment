@@ -138,6 +138,9 @@ class TextPreprocessor:
         else:
             raise ValueError(f"Unknown tokenizer type: {self.tokenizer_type}")
         
+        if self.lowercase:
+            tokens = [token.lower() for token in tokens]
+            
         # Remove stopwords if configured
         if self.remove_stopwords:
             tokens = [token for token in tokens if token.lower() not in self.stop_words]
