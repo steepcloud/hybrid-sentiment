@@ -58,7 +58,7 @@ deep_learning:
     embedding_dim: 300
     hidden_dim: 128
     num_layers: 2
-    dropout: 0.3
+    dropout: 0.7
     bidirectional: true
   
   # Transformer Configuration
