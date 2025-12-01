@@ -68,6 +68,34 @@ deep_learning:
     num_layers: 3
     dim_feedforward: 512
     dropout: 0.1
+  
+  # BERT/RoBERTa/DistilBERT Configuration
+  bert:
+    model_name: "bert-base-uncased"
+    max_length: 512
+    dropout: 0.3
+    freeze_bert: false  # Set to true to only train classifier head
+    learning_rate: 2e-5  # Lower LR for fine-tuning
+    batch_size: 16  # Smaller batch for memory
+    epochs: 3  # Fewer epochs for fine-tuning
+
+  roberta:
+    model_name: "roberta-base"
+    max_length: 512
+    dropout: 0.3
+    freeze_bert: false
+    learning_rate: 2e-5
+    batch_size: 16
+    epochs: 3
+
+  distilbert:
+    model_name: "distilbert-base-uncased"
+    max_length: 512
+    dropout: 0.3
+    freeze_bert: false
+    learning_rate: 2e-5
+    batch_size: 16
+    epochs: 3
 
   # Word Embeddings
   word_embeddings:
@@ -227,7 +255,10 @@ experiments:
   embedding_types:
     - lstm
     - gru
+    - transformer
     - bert
+    - roberta
+    - distilbert
     - word2vec
   
   # Compare classical ML vs end-to-end DL
