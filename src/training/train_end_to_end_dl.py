@@ -520,7 +520,7 @@ def main():
     parser = argparse.ArgumentParser(description='Train end-to-end deep learning models')
     parser.add_argument('--dataset', type=str, default='imdb', choices=['imdb', 'twitter'],
                         help='Dataset to use')
-    parser.add_argument('--model', type=str, default='lstm', choices=['lstm', 'gru', 'transformer'],
+    parser.add_argument('--model', type=str, default='lstm', choices=['lstm', 'gru', 'transformer', 'bert', 'roberta', 'distilbert'],
                         help='Model type')
     parser.add_argument('--config', type=str, default='configs/config.yaml',
                         help='Path to config file')
