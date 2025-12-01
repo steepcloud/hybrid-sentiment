@@ -84,8 +84,23 @@ class ClassicalMLTrainer:
             elif self.encoder_type == 'transformer':
                 from src.models.deep_learning.transformer_encoder import create_transformer_encoder_from_config
                 self.encoder = create_transformer_encoder_from_config(vocab_size=vocab_size)
+            elif self.encoder_type in ['bert', 'roberta', 'distilbert']:
+                # Load BERT-based encoder
+                from src.models.deep_learning.bert_encoder import BERTClassifier
+                model_name_map = {
+                    'bert': 'bert-base-uncased',
+                    'roberta': 'roberta-base',
+                    'distilbert': 'distilbert-base-uncased'
+                }
+                model_name = model_name_map[self.encoder_type]
+                self.encoder = BERTClassifier(model_name=model_name)
             
-            self.encoder.load_state_dict(checkpoint['model_state_dict'])
+            # Load state dict for non-BERT models
+            if self.encoder_type not in ['bert', 'roberta', 'distilbert']:
+                self.encoder.load_state_dict(checkpoint['model_state_dict'])
+            else:
+                # For BERT, load the full checkpoint
+                self.encoder.load_state_dict(checkpoint['model_state_dict'])
             self.encoder.to(self.device)
             self.encoder.eval()
             print(f"✓ Encoder loaded successfully")
@@ -103,6 +118,16 @@ class ClassicalMLTrainer:
             elif self.encoder_type == 'transformer':
                 from src.models.deep_learning.transformer_encoder import create_transformer_encoder_from_config
                 self.encoder = create_transformer_encoder_from_config(vocab_size=vocab_size)
+            elif self.encoder_type in ['bert', 'roberta', 'distilbert']:
+                # Create BERT encoder with random weights
+                from src.models.deep_learning.bert_encoder import BERTClassifier
+                model_name_map = {
+                    'bert': 'bert-base-uncased',
+                    'roberta': 'roberta-base',
+                    'distilbert': 'distilbert-base-uncased'
+                }
+                model_name = model_name_map[self.encoder_type]
+                self.encoder = BERTClassifier(model_name=model_name)
             
             self.encoder.to(self.device)
             self.encoder.eval()
@@ -126,41 +151,62 @@ class ClassicalMLTrainer:
         print(f"\nExtracting embeddings for {len(texts)} samples...")
         
         embeddings_list = []
+
+        is_bert = self.encoder_type in ['bert', 'roberta', 'distilbert']
+
+        if is_bert:
+            # Use BERT tokenizer
+            tokenizer = self.encoder.encoder.tokenizer
         
         with torch.no_grad():
             for i in range(0, len(texts), batch_size):
                 batch_texts = texts[i:i+batch_size]
-                
-                # Tokenize and encode
-                batch_ids = []
-                batch_lengths = []
-                
-                for text in batch_texts:
-                    cleaned = self.preprocessor.clean_text(text)
-                    tokens = self.preprocessor.tokenize(cleaned)
-                    ids = [self.preprocessor.vocab.get(token, self.preprocessor.UNK_IDX) 
-                           for token in tokens]
+
+                if is_bert:
+                    # BERT tokenization
+                    encodings = tokenizer(
+                        batch_texts,
+                        truncation=True,
+                        padding='max_length',
+                        max_length=512,
+                        return_tensors='pt'
+                    )
+                    input_ids = encodings['input_ids'].to(self.device)
+                    attention_mask = encodings['attention_mask'].to(self.device)
                     
-                    batch_ids.append(ids)
-                    batch_lengths.append(len(ids))
-                
-                # Pad sequences
-                max_len = min(max(batch_lengths) if batch_lengths else 1, self.config['data']['max_length'])
-                padded_ids = np.zeros((len(batch_ids), max_len), dtype=np.int64)
-                
-                for j, ids in enumerate(batch_ids):
-                    length = min(len(ids), max_len)
-                    padded_ids[j, :length] = ids[:length]
-                
-                # Convert to tensors
-                input_ids = torch.LongTensor(padded_ids).to(self.device)
-                lengths = torch.LongTensor([min(l, max_len) for l in batch_lengths]).to(self.device)
-                
-                # Get embeddings
-                if self.encoder_type == 'transformer':
-                    batch_embeddings = self.encoder(input_ids, return_sequence=False)
+                    # Get embeddings
+                    batch_embeddings = self.encoder.get_embeddings(input_ids, attention_mask)
                 else:
-                    batch_embeddings = self.encoder(input_ids, lengths, return_sequence=False)
+                    # Tokenize and encode
+                    batch_ids = []
+                    batch_lengths = []
+                    
+                    for text in batch_texts:
+                        cleaned = self.preprocessor.clean_text(text)
+                        tokens = self.preprocessor.tokenize(cleaned)
+                        ids = [self.preprocessor.vocab.get(token, self.preprocessor.UNK_IDX) 
+                            for token in tokens]
+                        
+                        batch_ids.append(ids)
+                        batch_lengths.append(len(ids))
+                    
+                    # Pad sequences
+                    max_len = min(max(batch_lengths) if batch_lengths else 1, self.config['data']['max_length'])
+                    padded_ids = np.zeros((len(batch_ids), max_len), dtype=np.int64)
+                    
+                    for j, ids in enumerate(batch_ids):
+                        length = min(len(ids), max_len)
+                        padded_ids[j, :length] = ids[:length]
+                    
+                    # Convert to tensors
+                    input_ids = torch.LongTensor(padded_ids).to(self.device)
+                    lengths = torch.LongTensor([min(l, max_len) for l in batch_lengths]).to(self.device)
+                    
+                    # Get embeddings
+                    if self.encoder_type == 'transformer':
+                        batch_embeddings = self.encoder(input_ids, return_sequence=False)
+                    else:
+                        batch_embeddings = self.encoder(input_ids, lengths, return_sequence=False)
                 
                 embeddings_list.append(batch_embeddings.cpu().numpy())
                 
