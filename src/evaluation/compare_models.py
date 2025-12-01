@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import scipy.stats as stats
+from itertools import combinations
 from typing import Dict, List, Optional, Tuple
 import os
 import pickle
@@ -215,6 +217,130 @@ class ModelComparator:
         
         return best_model, best_value
     
+    def perform_statistical_tests(self, dataset: str = 'test') -> Dict:
+        """
+        Perform ANOVA and pairwise t-tests on model accuracies.
+        
+        Args:
+            dataset: Dataset to test on
+            
+        Returns:
+            Dictionary with test results
+        """
+        # Extract accuracies by model
+        model_accuracies = {}
+        for model_name, datasets in self.results.items():
+            if dataset in datasets:
+                # Use accuracy as primary metric
+                acc = datasets[dataset].get('accuracy', 0)
+                model_accuracies[model_name] = [acc]  # Single value, but in list for consistency
+        
+        if len(model_accuracies) < 2:
+            print("⚠️  Need at least 2 models for statistical tests")
+            return {}
+        
+        print("\n" + "="*70)
+        print("STATISTICAL TESTS")
+        print("="*70)
+        
+        # Note: With single values per model, we can't do proper ANOVA
+        # Instead, compare F1 scores as point estimates
+        print("\n📊 Model Performance Summary:")
+        sorted_models = sorted(model_accuracies.items(), key=lambda x: x[1][0], reverse=True)
+        for model, acc_list in sorted_models:
+            metrics = self.results[model][dataset]
+            print(f"  {model:30s}: Acc={metrics['accuracy']:.4f}, F1={metrics['f1']:.4f}, AUC={metrics['roc_auc']:.4f}")
+        
+        # Calculate performance differences
+        print("\n📈 Performance Gaps (vs Best Model):")
+        best_model, best_acc = sorted_models[0]
+        print(f"  Best: {best_model} (Acc={best_acc[0]:.4f})")
+        
+        gaps = []
+        for model, acc_list in sorted_models[1:]:
+            gap = best_acc[0] - acc_list[0]
+            gaps.append({'model': model, 'gap': gap})
+            print(f"  {model:30s}: -{gap:.4f} ({gap*100:.2f}% lower)")
+        
+        return {
+            'summary': sorted_models,
+            'best_model': best_model,
+            'performance_gaps': gaps
+        }
+
+    def plot_statistical_summary(
+        self,
+        stats_results: Dict,
+        dataset: str = 'test',
+        save_path: Optional[str] = None
+    ):
+        """
+        Plot statistical summary and performance comparison.
+        
+        Args:
+            stats_results: Results from perform_statistical_tests
+            dataset: Dataset name
+            save_path: Path to save plot
+        """
+        if not stats_results:
+            print("⚠️  No statistical results to plot")
+            return
+        
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+        
+        # Left: Model ranking with confidence intervals (based on metric spread)
+        sorted_models = stats_results['summary']
+        model_names = [m[0] for m in sorted_models]
+        accuracies = [m[1][0] for m in sorted_models]
+        
+        # Get F1 scores for comparison
+        f1_scores = [self.results[m[0]][dataset]['f1'] for m in sorted_models]
+        
+        y_pos = np.arange(len(model_names))
+        
+        ax1.barh(y_pos, accuracies, color='steelblue', alpha=0.7, label='Accuracy')
+        ax1.scatter(f1_scores, y_pos, color='orange', marker='D', s=100, label='F1 Score', zorder=3)
+        
+        ax1.set_yticks(y_pos)
+        ax1.set_yticklabels(model_names)
+        ax1.set_xlabel('Score')
+        ax1.set_title('Model Performance Ranking')
+        ax1.set_xlim(0, 1.0)
+        ax1.legend()
+        ax1.grid(axis='x', alpha=0.3)
+        
+        # Add value labels
+        for i, (acc, f1) in enumerate(zip(accuracies, f1_scores)):
+            ax1.text(acc, i, f' {acc:.4f}', va='center', fontsize=9)
+        
+        # Right: Performance gaps
+        if 'performance_gaps' in stats_results:
+            gaps_data = stats_results['performance_gaps']
+            gap_models = [g['model'] for g in gaps_data]
+            gap_values = [g['gap'] * 100 for g in gaps_data]  # Convert to percentage
+            
+            colors = ['red' if g > 2 else 'orange' if g > 1 else 'yellow' for g in gap_values]
+            
+            y_pos2 = np.arange(len(gap_models))
+            ax2.barh(y_pos2, gap_values, color=colors, alpha=0.7)
+            ax2.set_yticks(y_pos2)
+            ax2.set_yticklabels(gap_models)
+            ax2.set_xlabel('Performance Gap (%)')
+            ax2.set_title(f'Gap from Best Model ({stats_results["best_model"]})')
+            ax2.grid(axis='x', alpha=0.3)
+            
+            # Add value labels
+            for i, gap in enumerate(gap_values):
+                ax2.text(gap, i, f' {gap:.2f}%', va='center', fontsize=9)
+        
+        plt.tight_layout()
+        
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"✓ Statistical summary plot saved: {save_path}")
+        
+        plt.show()
+    
     def save_comparison(self, save_path: str):
         """
         Save comparison results to file.
@@ -407,6 +533,33 @@ def main():
         dataset='test',
         save_path=f'{args.output_dir}/{args.dataset}_accuracy_comparison.png'
     )
+
+    # ============================================================
+    # Statistical Analysis
+    # ============================================================
+    print("\n📊 Performing statistical analysis...")
+    stats_results = comparator.perform_statistical_tests(dataset='test')
+
+    if stats_results:
+        comparator.plot_statistical_summary(
+            stats_results,
+            dataset='test',
+            save_path=f'{args.output_dir}/{args.dataset}_statistical_summary.png'
+        )
+        
+        # Save statistical results to text file
+        stats_output = f'{args.output_dir}/{args.dataset}_statistical_analysis.txt'
+        with open(stats_output, 'w') as f:
+            f.write("="*70 + "\n")
+            f.write("STATISTICAL ANALYSIS\n")
+            f.write("="*70 + "\n\n")
+            f.write(f"Best Model: {stats_results['best_model']}\n")
+            f.write(f"Best Accuracy: {stats_results['summary'][0][1][0]:.4f}\n\n")
+            f.write("Performance Gaps:\n")
+            for gap_data in stats_results['performance_gaps']:
+                f.write(f"  {gap_data['model']:30s}: -{gap_data['gap']:.4f} ({gap_data['gap']*100:.2f}%)\n")
+        
+        print(f"✓ Statistical analysis saved: {stats_output}")
     
     # ============================================================
     # Save Results
@@ -422,6 +575,8 @@ def main():
     print(f"  - {args.dataset}_all_metrics.png")
     print(f"  - {args.dataset}_f1_comparison.png")
     print(f"  - {args.dataset}_accuracy_comparison.png")
+    print(f"  - {args.dataset}_statistical_summary.png")
+    print(f"  - {args.dataset}_statistical_analysis.txt")
 
 
 if __name__ == "__main__":

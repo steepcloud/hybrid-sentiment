@@ -20,6 +20,7 @@ from src.data.preprocessor import TextPreprocessor
 from src.models.deep_learning.lstm_encoder import LSTMClassifier, create_lstm_classifier_from_config
 from src.models.deep_learning.gru_encoder import GRUClassifier, create_gru_classifier_from_config
 from src.models.deep_learning.transformer_encoder import TransformerClassifier, create_transformer_classifier_from_config
+from src.models.deep_learning.bert_encoder import BERTClassifier, create_bert_classifier_from_config
 from src.evaluation.metrics import calculate_metrics, print_metrics
 from src.utils.helpers import set_seed, save_checkpoint, format_time, get_device, count_parameters
 from src.utils.config import Config
@@ -36,7 +37,7 @@ class EndToEndDLTrainer:
         """
         Args:
             config_path: Path to configuration file
-            model_type: Type of model ('lstm', 'gru', 'transformer')
+            model_type: Type of model ('lstm', 'gru', 'transformer', 'bert')
         """
         # Load config
         self.config = Config(config_path)
@@ -81,6 +82,37 @@ class EndToEndDLTrainer:
         Returns:
             DataLoader
         """
+
+        if self.model_type in ['bert', 'roberta', 'distilbert']:
+            # Use BERT tokenizer
+            model_name_map = {
+                'bert': 'bert-base-uncased',
+                'roberta': 'roberta-base',
+                'distilbert': 'distilbert-base-uncased'
+            }
+            model_name = model_name_map[self.model_type]
+            
+            from transformers import AutoTokenizer
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            
+            # Tokenize texts
+            encodings = tokenizer(
+                texts,
+                truncation=True,
+                padding='max_length',
+                max_length=512,
+                return_tensors='pt'
+            )
+            
+            input_ids = encodings['input_ids']
+            attention_mask = encodings['attention_mask']
+            labels_tensor = torch.LongTensor(labels)
+            
+            dataset = TensorDataset(input_ids, attention_mask, labels_tensor)
+            dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+            
+            return dataloader
+    
         # Tokenize and encode texts
         input_ids_list = []
         lengths_list = []
@@ -114,19 +146,25 @@ class EndToEndDLTrainer:
         
         return dataloader
     
-    def create_model(self, vocab_size: int) -> nn.Module:
+    def create_model(self, vocab_size: int = None) -> nn.Module:
         """
         Create model based on type.
         
         Args:
-            vocab_size: Vocabulary size
+            vocab_size: Vocabulary size (optional for BERT)
             
         Returns:
             Model
         """
         print(f"\nCreating {self.model_type.upper()} model...")
         
-        if self.model_type == 'lstm':
+        if self.model_type == 'bert':
+            model = create_bert_classifier_from_config('bert-base-uncased')
+        elif self.model_type == 'roberta':
+            model = create_bert_classifier_from_config('roberta-base')
+        elif self.model_type == 'distilbert':
+            model = create_bert_classifier_from_config('distilbert-base-uncased')
+        elif self.model_type == 'lstm':
             model = create_lstm_classifier_from_config(vocab_size=vocab_size)
         elif self.model_type == 'gru':
             model = create_gru_classifier_from_config(vocab_size=vocab_size)
@@ -161,7 +199,7 @@ class EndToEndDLTrainer:
         epoch: int
     ) -> Dict:
         """
-        Train for one epoch.
+        Train for one epoch. (handles BERT batches)
         
         Args:
             train_loader: Training data loader
@@ -178,18 +216,28 @@ class EndToEndDLTrainer:
         
         pbar = tqdm(train_loader, desc=f"Epoch {epoch}")
         
-        for batch_idx, (input_ids, lengths, labels) in enumerate(pbar):
-            input_ids = input_ids.to(self.device)
-            lengths = lengths.to(self.device)
-            labels = labels.to(self.device)
-            
-            # Forward pass
-            self.optimizer.zero_grad()
-            
-            if self.model_type == 'transformer':
-                logits = self.model(input_ids)
+        for batch in pbar:
+            # Handle BERT vs traditional models
+            if self.model_type in ['bert', 'roberta', 'distilbert']:
+                input_ids, attention_mask, labels = batch
+                input_ids = input_ids.to(self.device)
+                attention_mask = attention_mask.to(self.device)
+                labels = labels.to(self.device)
+                
+                self.optimizer.zero_grad()
+                logits = self.model(input_ids, attention_mask)
             else:
-                logits = self.model(input_ids, lengths)
+                input_ids, lengths, labels = batch
+                input_ids = input_ids.to(self.device)
+                lengths = lengths.to(self.device)
+                labels = labels.to(self.device)
+                
+                self.optimizer.zero_grad()
+                
+                if self.model_type == 'transformer':
+                    logits = self.model(input_ids)
+                else:
+                    logits = self.model(input_ids, lengths)
             
             loss = self.criterion(logits, labels)
             

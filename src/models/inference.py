@@ -91,21 +91,40 @@ class HybridSentimentPredictor:
                         hidden_dim = state_dict[rnn_key].shape[0] // (4 if model_type == 'lstm' else 3)
                     else:
                         hidden_dim = 256
-                else:
-                    hidden_dim = 256
                 
-                layer_keys = [k for k in state_dict.keys() if f'encoder.{model_type}.weight_hh_l' in k and '_reverse' not in k]
-                num_layers = len(layer_keys)
+                    layer_keys = [k for k in state_dict.keys() if f'encoder.{model_type}.weight_hh_l' in k and '_reverse' not in k]
+                    num_layers = len(layer_keys)
                 
-                model_config = {
-                    'vocab_size': vocab_size,
-                    'embedding_dim': embedding_dim,
-                    'hidden_dim': hidden_dim,
-                    'num_layers': num_layers,
-                    'dropout': 0.5
-                }
+                    model_config = {
+                        'vocab_size': vocab_size,
+                        'embedding_dim': embedding_dim,
+                        'hidden_dim': hidden_dim,
+                        'num_layers': num_layers,
+                        'dropout': 0.5
+                    }
+
+                elif model_type == 'transformer':
+                    hidden_dim = 256  # Default
+            
+                    # Infer num_layers from transformer layers
+                    layer_keys = [k for k in state_dict.keys() if 'encoder.transformer_encoder.layers.' in k and 'self_attn.in_proj_weight' in k]
+                    num_layers = len(set(k.split('.')[3] for k in layer_keys)) if layer_keys else 3
+                    
+                    # Infer max_len from pos_encoder
+                    pos_encoder_key = 'encoder.pos_encoder.pe'
+                    max_len = state_dict[pos_encoder_key].shape[1] if pos_encoder_key in state_dict else 512
+                    
+                    model_config = {
+                        'vocab_size': vocab_size,
+                        'embedding_dim': embedding_dim,
+                        'num_heads': 4,  # Fixed to match training
+                        'num_layers': num_layers,
+                        'max_len': max_len,  # Added
+                        'dropout': 0.1
+                    }
+
                 print(f"  Inferred config: {model_config}")
-        
+
         # Initialize encoder
         if model_type == 'lstm':
             self.encoder = LSTMClassifier(
@@ -127,8 +146,9 @@ class HybridSentimentPredictor:
             self.encoder = TransformerClassifier(
                 vocab_size=model_config['vocab_size'],
                 embedding_dim=model_config['embedding_dim'],
-                num_heads=model_config.get('num_heads', 8),
+                num_heads=model_config.get('num_heads', 4),
                 num_layers=model_config['num_layers'],
+                max_seq_length=model_config.get('max_len', 512),
                 dropout=model_config.get('dropout', 0.1)
             )
         
@@ -191,16 +211,9 @@ class HybridSentimentPredictor:
         except Exception as e:
             raise ValueError(f"Failed to load classifier from {self.classifier_path}: {e}")
     
-    def _text_to_indices(self, text: str, max_len: int = 256) -> torch.Tensor:
+    def _text_to_indices(self, text: str, max_len: int = 256) -> Tuple[torch.Tensor, int]:
         """
         Convert text to indices.
-        
-        Args:
-            text: Input text
-            max_len: Maximum sequence length
-            
-        Returns:
-            Tensor of shape (1, max_len)
         """
         # Preprocess text
         tokens = self.preprocessor.tokenize(text)
@@ -209,13 +222,15 @@ class HybridSentimentPredictor:
         indices = [self.word_to_idx.get(token, self.word_to_idx.get('<UNK>', 1)) 
                    for token in tokens[:max_len]]
         
+        actual_length = len(indices)
+        
         # Pad or truncate
         if len(indices) < max_len:
             indices += [self.word_to_idx.get('<PAD>', 0)] * (max_len - len(indices))
         else:
             indices = indices[:max_len]
         
-        return torch.tensor([indices], dtype=torch.long)
+        return torch.tensor([indices], dtype=torch.long), actual_length
     
     def _extract_features(self, text: str) -> np.ndarray:
         """
@@ -228,8 +243,14 @@ class HybridSentimentPredictor:
             Feature vector (numpy array)
         """
         # Convert text to indices
-        indices = self._text_to_indices(text).to(self.device)
+        indices, actual_length = self._text_to_indices(text)
         
+        if indices.dim() == 1:
+            # This is the correct action if _text_to_indices returns 1D [L]
+            indices = indices.unsqueeze(0).to(self.device)
+        elif indices.dim() == 2:
+            indices = indices.to(self.device)
+
         # Extract features
         with torch.no_grad():
             features = self.encoder.get_embeddings(indices)
@@ -277,7 +298,7 @@ class HybridSentimentPredictor:
         
         processing_time = (time.time() - start_time) * 1000  # Convert to ms
         
-        sentiment = 'positive' if prediction == 1 else 'negative'
+        sentiment = 'positive' if prediction == 0 else 'negative'
         confidence = max(probabilities)
         
         print(f"   Final sentiment: {sentiment}")
@@ -324,7 +345,7 @@ class HybridSentimentPredictor:
             
             # Format results
             for pred, probs in zip(predictions, probabilities):
-                sentiment = 'positive' if pred == 1 else 'negative'
+                sentiment = 'positive' if pred == 0 else 'negative'
                 confidence = max(probs)
                 
                 results.append({
@@ -483,7 +504,7 @@ class EndToEndPredictor:
         print(f"  ✓ Model loaded: {model_type}")
         print(f"  Vocab size: {len(self.word_to_idx)}")
     
-    def _text_to_indices(self, text: str, max_len: int = 256) -> torch.Tensor:
+    def _text_to_indices(self, text: str, max_len: int = 256) -> Tuple[torch.Tensor, int]:
         """Convert text to indices."""
         tokens = self.preprocessor.tokenize(text)
         
@@ -493,6 +514,8 @@ class EndToEndPredictor:
         
         indices = [self.word_to_idx.get(token, self.word_to_idx.get('<UNK>', 1)) 
                    for token in tokens[:max_len]]
+        
+        actual_length = len(indices)
         
         print(f"   Indices (first 20): {indices[:20]}")
         print(f"   Vocab check - 'love': {self.word_to_idx.get('love', 'NOT FOUND')}")
@@ -505,18 +528,21 @@ class EndToEndPredictor:
         else:
             indices = indices[:max_len]
         
-        return torch.tensor([indices], dtype=torch.long)
+        return torch.tensor([indices], dtype=torch.long), actual_length
     
     def predict(self, text: str) -> Dict:
         """Predict sentiment for a single text."""
         start_time = time.time()
         
         # Convert to indices
-        indices = self._text_to_indices(text).to(self.device)
+        indices, actual_length = self._text_to_indices(text)
+        indices = indices.to(self.device)
+
+        sequence_length = torch.tensor([actual_length], dtype=torch.long).to(self.device)
         
         # Predict
         with torch.no_grad():
-            logits = self.model(indices)
+            logits = self.model(indices, sequence_length)
             probabilities = torch.softmax(logits, dim=1).cpu().numpy()[0]
             prediction = np.argmax(probabilities)
         
@@ -530,7 +556,7 @@ class EndToEndPredictor:
         print(f"   Prediction (argmax): {prediction}")
         print(f"   Prob[0]: {probabilities[0]:.4f}, Prob[1]: {probabilities[1]:.4f}\n")
         
-        sentiment = 'positive' if prediction == 1 else 'negative'
+        sentiment = 'positive' if prediction == 0 else 'negative'
         confidence = float(probabilities[prediction])
         
         return {

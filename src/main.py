@@ -83,6 +83,8 @@ def train_all(args):
     print("="*70)
     
     models = ['lstm', 'gru', 'transformer']
+    if args.include_bert:
+        models.extend(['bert', 'roberta', 'distilbert'])
     
     # 1. Train Word2Vec embeddings
     print("\n[1/4] Training Word2Vec embeddings...")
@@ -500,7 +502,7 @@ Examples:
     parser_dl = subparsers.add_parser('train-dl', help='Train end-to-end deep learning model')
     parser_dl.add_argument('--dataset', type=str, default='imdb', choices=['imdb', 'twitter', 'custom'],
                           help='Dataset to use')
-    parser_dl.add_argument('--model', type=str, default='lstm', choices=['lstm', 'gru', 'transformer'],
+    parser_dl.add_argument('--model', type=str, default='lstm', choices=['lstm', 'gru', 'transformer', 'bert', 'roberta', 'distilbert'],
                           help='Model architecture')
     parser_dl.add_argument('--epochs', type=int, default=10, help='Number of epochs')
     parser_dl.add_argument('--batch-size', type=int, default=32, help='Batch size')
@@ -524,6 +526,8 @@ Examples:
     parser_all.add_argument('--epochs', type=int, default=10, help='Number of epochs for DL models')
     parser_all.add_argument('--batch-size', type=int, default=32, help='Batch size')
     parser_all.add_argument('--lr', type=float, default=0.001, help='Learning rate')
+    parser_all.add_argument('--include-bert', action='store_true', 
+                       help='Include BERT/RoBERTa (slower, requires more memory)')
     
     # ============================================================
     # Evaluate Models

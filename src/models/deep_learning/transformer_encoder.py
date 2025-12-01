@@ -151,13 +151,16 @@ class TransformerEncoder(nn.Module):
         if mask is None:
             mask = self._create_padding_mask(input_ids)
         
+        if mask.dim() == 1:
+            mask = mask.unsqueeze(0)
+
         # Get embeddings
         x = self.embedding(input_ids) * math.sqrt(self.embedding_dim)  # Scale embeddings
         x = self.pos_encoder(x)
         
         # Pass through transformer
         # Note: src_key_padding_mask expects True for positions to be masked
-        output = self.transformer_encoder(x, src_key_padding_mask=mask)
+        output = self.transformer_encoder(x, src_key_padding_mask=mask.bool())
         
         if return_sequence:
             # Return full sequence
