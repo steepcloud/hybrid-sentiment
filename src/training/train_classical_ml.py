@@ -361,7 +361,7 @@ def main():
     parser = argparse.ArgumentParser(description='Train classical ML models')
     parser.add_argument('--dataset', type=str, default='imdb', choices=['imdb', 'twitter'],
                         help='Dataset to use')
-    parser.add_argument('--encoder', type=str, default='lstm', choices=['lstm', 'gru', 'transformer'],
+    parser.add_argument('--encoder', type=str, default='lstm', choices=['lstm', 'gru', 'transformer', 'bert', 'roberta', 'distilbert'],
                         help='Encoder type')
     parser.add_argument('--encoder_path', type=str, default=None,
                         help='Path to pre-trained encoder')
