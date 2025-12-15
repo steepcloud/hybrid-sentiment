@@ -5,9 +5,7 @@ Plot training curves, loss, accuracy, F1 scores over epochs.
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 from typing import Dict, List, Optional
-import pandas as pd
 
 
 class MetricsVisualizer:
@@ -32,7 +30,7 @@ class MetricsVisualizer:
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
         epochs = range(1, len(history.get('train_loss', [])) + 1)
         
-        # Loss
+        # loss
         if 'train_loss' in history:
             axes[0, 0].plot(epochs, history['train_loss'], 'b-', label='Train Loss', linewidth=2)
         if 'val_loss' in history:
@@ -43,7 +41,7 @@ class MetricsVisualizer:
         axes[0, 0].legend()
         axes[0, 0].grid(True, alpha=0.3)
         
-        # Accuracy
+        # accuracy
         if 'train_acc' in history:
             axes[0, 1].plot(epochs, history['train_acc'], 'b-', label='Train Acc', linewidth=2)
         if 'val_acc' in history:
@@ -65,7 +63,7 @@ class MetricsVisualizer:
         axes[1, 0].legend()
         axes[1, 0].grid(True, alpha=0.3)
         
-        # Learning Rate (if available)
+        # learning Rate (if available)
         if 'learning_rate' in history:
             axes[1, 1].plot(epochs, history['learning_rate'], 'g-', linewidth=2)
             axes[1, 1].set_title('Learning Rate Schedule', fontsize=12)

@@ -5,8 +5,7 @@ from sklearn.metrics import (
     recall_score,
     f1_score,
     roc_auc_score,
-    confusion_matrix,
-    classification_report
+    confusion_matrix
 )
 from typing import Dict, Optional, Tuple
 import matplotlib.pyplot as plt
@@ -42,17 +41,17 @@ def calculate_metrics(
     if y_proba is not None:
         try:
             if y_proba.ndim == 2 and y_proba.shape[1] == 2:
-                # Binary classification - use positive class probabilities
+                # binary classification - use positive class probabilities
                 metrics['roc_auc'] = roc_auc_score(y_true, y_proba[:, 1])
             else:
-                # Multi-class or single column
+                # multi-class or single column
                 metrics['roc_auc'] = roc_auc_score(y_true, y_proba, multi_class='ovr')
         except:
             metrics['roc_auc'] = 0.0
     else:
         metrics['roc_auc'] = 0.0
     
-    # Confusion matrix
+    # confusion matrix
     metrics['confusion_matrix'] = confusion_matrix(y_true, y_pred)
     
     return metrics

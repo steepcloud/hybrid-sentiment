@@ -18,7 +18,7 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
         
-        # Create positional encoding matrix
+        # create positional encoding matrix
         pe = torch.zeros(max_len, embedding_dim)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, embedding_dim, 2).float() * (-math.log(10000.0) / embedding_dim))
@@ -80,25 +80,25 @@ class TransformerEncoder(nn.Module):
         self.num_layers = num_layers
         self.padding_idx = padding_idx
         
-        # Embedding layer
+        # embedding layer
         self.embedding = nn.Embedding(
             vocab_size,
             embedding_dim,
             padding_idx=padding_idx
         )
         
-        # Load pretrained embeddings if provided
+        # load pretrained embeddings if provided
         if pretrained_embeddings is not None:
             self.embedding.weight.data.copy_(pretrained_embeddings)
         
-        # Freeze embeddings if specified
+        # freeze embeddings if specified
         if freeze_embeddings:
             self.embedding.weight.requires_grad = False
         
-        # Positional encoding
+        # positional encoding
         self.pos_encoder = PositionalEncoding(embedding_dim, max_seq_length, dropout)
         
-        # Transformer encoder layers
+        # transformer encoder layers
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=embedding_dim,
             nhead=num_heads,
@@ -112,10 +112,10 @@ class TransformerEncoder(nn.Module):
             num_layers=num_layers
         )
         
-        # Dropout
+        # dropout
         self.dropout = nn.Dropout(dropout)
         
-        # Output dimension
+        # output dimension
         self.output_dim = embedding_dim
     
     def _create_padding_mask(self, input_ids: torch.Tensor) -> torch.Tensor:
@@ -147,30 +147,30 @@ class TransformerEncoder(nn.Module):
         Returns:
             embeddings: [batch_size, output_dim] or [batch_size, seq_length, output_dim]
         """
-        # Create padding mask if not provided
+        # create padding mask if not provided
         if mask is None:
             mask = self._create_padding_mask(input_ids)
         
         if mask.dim() == 1:
             mask = mask.unsqueeze(0)
 
-        # Get embeddings
+        # get embeddings
         x = self.embedding(input_ids) * math.sqrt(self.embedding_dim)  # Scale embeddings
         x = self.pos_encoder(x)
         
-        # Pass through transformer
+        # pass through transformer
         # Note: src_key_padding_mask expects True for positions to be masked
         output = self.transformer_encoder(x, src_key_padding_mask=mask.bool())
         
         if return_sequence:
-            # Return full sequence
+            # return full sequence
             return self.dropout(output)
         else:
             # Pool: take mean of non-padded tokens
             # Invert mask for pooling (True where we want to keep values)
             pooling_mask = (~mask).unsqueeze(-1).float()  # [batch_size, seq_length, 1]
             
-            # Sum and average
+            # sum and average
             sum_embeddings = (output * pooling_mask).sum(dim=1)
             avg_embeddings = sum_embeddings / pooling_mask.sum(dim=1).clamp(min=1)
             
@@ -214,7 +214,7 @@ class TransformerClassifier(nn.Module):
         """
         super(TransformerClassifier, self).__init__()
         
-        # Transformer encoder
+        # transformer encoder
         self.encoder = TransformerEncoder(
             vocab_size=vocab_size,
             embedding_dim=embedding_dim,
@@ -228,7 +228,7 @@ class TransformerClassifier(nn.Module):
             padding_idx=padding_idx
         )
         
-        # Classification head
+        # classification head
         self.classifier = nn.Sequential(
             nn.Linear(self.encoder.output_dim, dim_feedforward // 2),
             nn.ReLU(),
@@ -251,10 +251,10 @@ class TransformerClassifier(nn.Module):
         Returns:
             logits: [batch_size, num_classes]
         """
-        # Get embeddings from encoder
+        # get embeddings from encoder
         embeddings = self.encoder(input_ids, mask, return_sequence=False)
         
-        # Classify
+        # classify
         logits = self.classifier(embeddings)
         
         return logits

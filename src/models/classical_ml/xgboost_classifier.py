@@ -55,7 +55,7 @@ class XGBoostClassifier:
         self.use_label_encoder = use_label_encoder
         self.eval_metric = eval_metric
         
-        # Initialize model
+        # initialize model
         self.model = XGBClassifier(
             n_estimators=n_estimators,
             max_depth=max_depth,
@@ -72,7 +72,7 @@ class XGBoostClassifier:
             eval_metric=eval_metric
         )
         
-        # Training info
+        # training info
         self.is_trained = False
         self.feature_dim = None
         self.classes = None
@@ -112,7 +112,7 @@ class XGBoostClassifier:
         
         self.feature_dim = X_train.shape[1]
         
-        # Prepare eval set for early stopping
+        # prepare eval set for early stopping
         eval_set = None
         callbacks = None
 
@@ -123,7 +123,7 @@ class XGBoostClassifier:
                 from xgboost.callback import EarlyStopping
                 callbacks = [EarlyStopping(rounds=early_stopping_rounds, save_best=True)]
         
-        # Train model
+        # train model
         fit_params = {
             'verbose': verbose
         }
@@ -136,14 +136,14 @@ class XGBoostClassifier:
         
         self.model.fit(X_train, y_train, **fit_params)
         
-        # Get evaluation results if available
+        # get evaluation results if available
         if hasattr(self.model, 'evals_result_'):
             self.evals_result = self.model.evals_result_
         
         self.is_trained = True
         self.classes = self.model.classes_
         
-        # Calculate metrics
+        # calculate metrics
         metrics = {
             'train_accuracy': self.model.score(X_train, y_train),
             'n_estimators_used': self.model.best_iteration + 1 if hasattr(self.model, 'best_iteration') and self.model.best_iteration else self.n_estimators
@@ -225,16 +225,16 @@ class XGBoostClassifier:
         if not self.is_trained:
             raise ValueError("Model not trained. Call fit() first.")
         
-        # Get feature importances
+        # get feature importances
         importances = self.model.get_booster().get_score(importance_type=importance_type)
         
-        # Convert to array (handle missing features)
+        # convert to array (handle missing features)
         importance_array = np.zeros(self.feature_dim)
         for feat_name, importance in importances.items():
             feat_idx = int(feat_name.replace('f', ''))
             importance_array[feat_idx] = importance
         
-        # Get indices sorted by importance
+        # get indices sorted by importance
         indices = np.argsort(importance_array)[::-1][:top_n]
         values = importance_array[indices]
         
@@ -338,7 +338,7 @@ def create_xgboost_from_config(
     
     xgb_config = config['classical_ml']['xgboost']
     
-    # Handle single values or lists (for hyperparameter tuning)
+    # handle single values or lists (for hyperparameter tuning)
     n_estimators = xgb_config.get('n_estimators', 100)
     if isinstance(n_estimators, list):
         n_estimators = n_estimators[0]

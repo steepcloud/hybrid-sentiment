@@ -46,21 +46,20 @@ class EmbeddingVisualizer:
             perplexity: t-SNE perplexity parameter
             save_path: Path to save figure
         """
-        # Select most common words
+        # select most common words
         embeddings = embeddings[:n_words]
         words = words[:n_words]
         
-        # Apply t-SNE
+        # apply t-SNE
         print(f"Applying t-SNE to {len(embeddings)} word embeddings...")
         tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42)
         embeddings_2d = tsne.fit_transform(embeddings)
-        
-        # Plot
+
         fig, ax = plt.subplots(figsize=self.figsize)
         ax.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], alpha=0.5, s=30)
         
-        # Annotate sample words
-        step = max(1, n_words // 50)  # Show ~50 labels
+        # annotate sample words
+        step = max(1, n_words // 50)  # show ~50 labels
         for i in range(0, len(words), step):
             ax.annotate(
                 words[i],
@@ -99,16 +98,15 @@ class EmbeddingVisualizer:
         embeddings = embeddings[:n_words]
         words = words[:n_words]
         
-        # Apply PCA
+        # apply PCA
         print(f"Applying PCA to {len(embeddings)} word embeddings...")
         pca = PCA(n_components=2, random_state=42)
         embeddings_2d = pca.fit_transform(embeddings)
         
-        # Plot
         fig, ax = plt.subplots(figsize=self.figsize)
         ax.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], alpha=0.5, s=30)
         
-        # Annotate
+        # annotate
         step = max(1, n_words // 50)
         for i in range(0, len(words), step):
             ax.annotate(
@@ -158,7 +156,7 @@ class EmbeddingVisualizer:
         ax.set_title(f'Top {top_k} Words Similar to "{word}"', fontsize=14)
         ax.set_xlim([0, 1])
         
-        # Add value labels
+        # add value labels
         for i, (w, s) in enumerate(zip(words, scores)):
             ax.text(s + 0.01, i, f'{s:.3f}', va='center', fontsize=9)
         
@@ -183,14 +181,14 @@ class EmbeddingVisualizer:
             labels: List of labels (0=negative, 1=positive)
             save_path: Path to save figure
         """
-        # Separate by sentiment
+        # separate by sentiment
         positive_texts = ' '.join([t for t, l in zip(texts, labels) if l == 1])
         negative_texts = ' '.join([t for t, l in zip(texts, labels) if l == 0])
         
-        # Create word clouds
+        # create word clouds
         fig, axes = plt.subplots(1, 2, figsize=(16, 6))
         
-        # Positive
+        # positive
         wc_pos = WordCloud(
             width=800,
             height=400,
@@ -203,7 +201,7 @@ class EmbeddingVisualizer:
         axes[0].set_title('Positive Sentiment Words', fontsize=14)
         axes[0].axis('off')
         
-        # Negative
+        # negative
         wc_neg = WordCloud(
             width=800,
             height=400,
@@ -239,7 +237,7 @@ class EmbeddingVisualizer:
             method: 'tsne' or 'pca'
             save_path: Path to save figure
         """
-        # Reduce to 2D
+        # reduce to 2D
         if method == 'tsne':
             print(f"Applying t-SNE to {len(embeddings)} samples...")
             reducer = TSNE(n_components=2, random_state=42)
@@ -249,7 +247,6 @@ class EmbeddingVisualizer:
         
         embeddings_2d = reducer.fit_transform(embeddings)
         
-        # Plot
         fig, ax = plt.subplots(figsize=self.figsize)
         
         for label, color, name in [(0, 'red', 'Negative'), (1, 'green', 'Positive')]:
@@ -331,14 +328,14 @@ def visualize_word2vec_embeddings(
     """
     from gensim.models import Word2Vec
     
-    # Load model
+    # load model
     model = Word2Vec.load(embedding_path)
     
-    # Get embeddings and words
+    # get embeddings and words
     words = list(model.wv.index_to_key[:n_words])
     embeddings = np.array([model.wv[w] for w in words])
     
-    # Visualize
+    # visualize
     viz = EmbeddingVisualizer()
     
     if method == 'tsne':
@@ -348,14 +345,14 @@ def visualize_word2vec_embeddings(
 
 
 if __name__ == "__main__":
-    # Example usage
+    # example usage
     print("Embedding Visualizer")
     print("=" * 50)
     
-    # Test with dummy data
+    # test with dummy data
     viz = EmbeddingVisualizer()
     
-    # Dummy embeddings
+    # dummy embeddings
     np.random.seed(42)
     dummy_embeddings = np.random.randn(100, 50)
     dummy_words = [f"word_{i}" for i in range(100)]

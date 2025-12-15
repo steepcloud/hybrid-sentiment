@@ -6,10 +6,7 @@ Unified command-line interface for training, evaluation, and inference.
 import argparse
 import sys
 from pathlib import Path
-import yaml
-from typing import Optional
 
-# Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
@@ -22,7 +19,7 @@ def train_embeddings(args):
     print("TRAINING WORD2VEC EMBEDDINGS")
     print("="*60)
     
-    # Convert args to list for train_embeddings
+    # convert args to list for train_embeddings
     emb_args = [
         '--dataset', args.dataset,
         '--embedding', args.embedding_type,
@@ -138,14 +135,14 @@ def predict(args):
     
     from src.models.inference import HybridSentimentPredictor
     
-    # Load predictor
+    # load predictor
     predictor = HybridSentimentPredictor(
         encoder_path=args.encoder_path,
         classifier_path=args.model_path,
         config_path='configs/config.yaml'
     )
     
-    # Predict
+    # predict
     result = predictor.predict(args.text)
     
     print(f"\nText: {args.text}")
@@ -173,7 +170,7 @@ def visualize(args):
         )
         
     elif args.viz_type == 'metrics':
-        print("⚠️  Metrics visualization requires training history")
+        print("[!]  Metrics visualization requires training history")
         print("   Run training first, then visualizations will be saved automatically")
         
     elif args.viz_type == 'comparison':
@@ -192,15 +189,15 @@ def demo_predict(args):
     
     from src.models.inference import HybridSentimentPredictor
     
-    # Auto-detect best model
+    # auto-detect best model
     if not args.model_path:
-        # Try to find trained models
+        # try to find trained models
         model_dir = Path(f'results/models')
         encoder_path = model_dir / f'deep_learning/{args.dataset}/lstm/lstm_best.pt'
         classifier_path = model_dir / f'classical_ml/{args.dataset}/lstm/xgboost.pkl'
         
         if not encoder_path.exists():
-            print(f"❌ No trained models found for {args.dataset}")
+            print(f"[X] No trained models found for {args.dataset}")
             print(f"   Expected: {encoder_path}")
             print("\n💡 Download pre-trained models from Google Colab results.zip")
             print("   Or train models first: python src/main.py train-all --dataset imdb")
@@ -213,7 +210,7 @@ def demo_predict(args):
         encoder_path = args.encoder_path
         classifier_path = args.model_path
     
-    # Load predictor
+    # load predictor
     print("\nLoading models...")
     predictor = HybridSentimentPredictor(
         encoder_path=str(encoder_path),
@@ -221,7 +218,7 @@ def demo_predict(args):
         config_path='configs/config.yaml'
     )
     
-    # Interactive mode
+    # interactive mode
     if args.interactive:
         print("\n" + "="*60)
         print("INTERACTIVE MODE - Enter 'quit' to exit")
@@ -246,7 +243,7 @@ def demo_predict(args):
             print(f"Time: {result['processing_time_ms']:.2f}ms")
             print(f"{'='*50}")
     
-    # Single prediction mode
+    # single prediction mode
     elif args.text:
         result = predictor.predict(args.text)
         
@@ -260,7 +257,7 @@ def demo_predict(args):
         print(f"Processing time: {result['processing_time_ms']:.2f}ms")
         print(f"{'='*50}")
     
-    # Batch demo mode
+    # batch demo mode
     else:
         demo_texts = [
             "This movie was absolutely amazing! Best film I've seen all year.",
@@ -293,7 +290,7 @@ def test_models(args):
     from src.models.inference import HybridSentimentPredictor
     from sklearn.metrics import accuracy_score, f1_score, classification_report
     
-    # Load test data
+    # load test data
     print(f"\nLoading {args.dataset} test set...")
     loader = DatasetLoader(config_path='configs/config.yaml')
     
@@ -304,13 +301,13 @@ def test_models(args):
     else:
         _, _, test_df = loader.load_custom(train_path=args.custom_path, use_cache=True)
     
-    # Test subset (for speed)
+    # test subset (for speed)
     if args.test_samples:
         test_df = test_df.head(args.test_samples)
     
     print(f"✓ Loaded {len(test_df)} test samples")
     
-    # Find all trained models
+    # find all trained models
     model_dir = Path(f'results/models')
     encoders = ['lstm', 'gru', 'transformer']
     classifiers = ['xgboost', 'random_forest', 'logistic_regression']
@@ -321,7 +318,7 @@ def test_models(args):
         encoder_path = model_dir / f'deep_learning/{args.dataset}/{encoder}/{encoder}_best.pt'
         
         if not encoder_path.exists():
-            print(f"⚠️  Skipping {encoder} (not trained)")
+            print(f"[!]  Skipping {encoder} (not trained)")
             continue
         
         for classifier in classifiers:
@@ -335,21 +332,21 @@ def test_models(args):
             print(f"Testing: {model_name}")
             print(f"{'='*60}")
             
-            # Load predictor
+            # load predictor
             predictor = HybridSentimentPredictor(
                 encoder_path=str(encoder_path),
                 classifier_path=str(classifier_path),
                 config_path='configs/config.yaml'
             )
             
-            # Predict
+            # predict
             print("Making predictions...")
             predictions = predictor.predict_batch(test_df['text'].tolist())
             
             y_pred = [1 if p['sentiment'] == 'positive' else 0 for p in predictions]
             y_true = test_df['label'].values
             
-            # Calculate metrics
+            # calculate metrics
             acc = accuracy_score(y_true, y_pred)
             f1 = f1_score(y_true, y_pred)
             
@@ -363,7 +360,7 @@ def test_models(args):
                 'f1': f1
             })
     
-    # Summary table
+    # summary table
     if results_summary:
         print("\n" + "="*60)
         print("SUMMARY")
@@ -397,10 +394,6 @@ def download_pretrained(args):
     print("   2. Extract to project root:")
     print("      unzip results.zip")
     print("   3. Models will be in: results/models/")
-    
-    # TODO: Implement automatic download
-    # from huggingface_hub import hf_hub_download
-    # model_path = hf_hub_download(repo_id="steepcloud/hybrid-sentiment", filename="lstm_xgboost.pkl")
 
 
 def list_models(args):
@@ -412,7 +405,7 @@ def list_models(args):
     model_dir = Path('results/models')
     
     if not model_dir.exists():
-        print("\n❌ No models directory found")
+        print("\n[X] No models directory found")
         print("   Train models or download pre-trained models first")
         return
     
@@ -558,14 +551,14 @@ Examples:
                            help='Dimensionality reduction method')
     parser_viz.add_argument('--output-dir', type=str, help='Output directory')
     
-    # Parse arguments
+    # parse arguments
     args = parser.parse_args()
     
     if not args.command:
         parser.print_help()
         return
     
-    # Execute command
+    # execute command
     command_map = {
         'train-embeddings': train_embeddings,
         'train-dl': train_deep_learning,
@@ -580,10 +573,10 @@ Examples:
         command_map[args.command](args)
         print("\n✓ Command executed successfully!")
     except KeyboardInterrupt:
-        print("\n\n⚠️  Interrupted by user")
+        print("\n\n[!]  Interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n[X] Error: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

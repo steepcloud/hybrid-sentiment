@@ -8,7 +8,6 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional
-from pathlib import Path
 
 
 class ComparisonVisualizer:
@@ -39,9 +38,9 @@ class ComparisonVisualizer:
                 'Transformer': {'accuracy': 0.91, 'f1': 0.90, 'precision': 0.92, 'recall': 0.89}
             }
         """
-        # Convert to DataFrame
+        # convert to DataFrame
         df = pd.DataFrame(results).T
-        df = df[metrics]  # Select only specified metrics
+        df = df[metrics]  # select only specified metrics
         
         # Plot grouped bar chart
         fig, ax = plt.subplots(figsize=self.figsize)
@@ -59,7 +58,7 @@ class ComparisonVisualizer:
                 alpha=0.8
             )
             
-            # Add value labels on bars
+            # add value labels on bars
             for bar in bars:
                 height = bar.get_height()
                 ax.text(
@@ -103,14 +102,14 @@ class ComparisonVisualizer:
         models = list(training_times.keys())
         times = list(training_times.values())
         
-        # Convert to minutes
+        # convert to minutes
         times_min = [t / 60 for t in times]
         
         fig, ax = plt.subplots(figsize=(10, 6))
         
         bars = ax.barh(models, times_min, color=plt.cm.viridis(np.linspace(0, 1, len(models))))
         
-        # Add value labels
+        # add value labels
         for bar, time in zip(bars, times_min):
             width = bar.get_width()
             ax.text(
@@ -154,7 +153,7 @@ class ComparisonVisualizer:
         
         bars = ax.bar(models, sizes, color=plt.cm.plasma(np.linspace(0, 1, len(models))))
         
-        # Add value labels
+        # add value labels
         for bar in bars:
             height = bar.get_height()
             ax.text(

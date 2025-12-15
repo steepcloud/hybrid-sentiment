@@ -45,7 +45,6 @@ class ConfusionVisualizer:
             fmt = 'd'
             title = 'Confusion Matrix'
         
-        # Plot
         fig, ax = plt.subplots(figsize=self.figsize)
         
         sns.heatmap(
@@ -87,7 +86,7 @@ class ConfusionVisualizer:
             labels: Class names
             save_path: Path to save figure
         """
-        # Get classification report as dict
+        # get classification report as dict
         report = classification_report(
             y_true,
             y_pred,
@@ -95,13 +94,12 @@ class ConfusionVisualizer:
             output_dict=True
         )
         
-        # Convert to DataFrame
+        # convert to DataFrame
         df = pd.DataFrame(report).transpose()
         
-        # Remove support column for cleaner visualization
-        df_viz = df.drop('support', axis=1).iloc[:-3]  # Remove avg rows
+        # remove support column for cleaner visualization
+        df_viz = df.drop('support', axis=1).iloc[:-3]  # remove avg rows
         
-        # Plot
         fig, ax = plt.subplots(figsize=(8, 6))
         
         sns.heatmap(
@@ -124,15 +122,14 @@ class ConfusionVisualizer:
             print(f"✓ Saved to {save_path}")
         
         plt.show()
-        
-        # Print text report
+
         print("\nDetailed Classification Report:")
         print("=" * 50)
         print(classification_report(y_true, y_pred, target_names=labels))
 
 
 if __name__ == "__main__":
-    # Test with dummy data
+    # test with dummy data
     np.random.seed(42)
     
     y_true = np.random.randint(0, 2, 1000)

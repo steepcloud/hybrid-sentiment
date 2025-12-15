@@ -1,7 +1,6 @@
 import yaml
 from typing import Dict, Any, Optional
 import os
-from pathlib import Path
 
 
 class Config:
@@ -189,34 +188,34 @@ def get_config_value(config: Dict, key: str, default: Any = None) -> Any:
 
 
 if __name__ == "__main__":
-    # Test configuration manager
+    # test configuration manager
     print("Testing Configuration Manager...")
     
-    # Load config
+    # load config
     print("\n" + "="*60)
     config = Config("configs/config.yaml")
     
-    # Print config
+    # print config
     config.print_config()
     
-    # Test get
+    # test get
     print("\n" + "="*60)
     print("Testing get method:")
     print(f"Random seed: {config.get('project.random_seed')}")
     print(f"Vocab size: {config.get('data.vocab_size')}")
     print(f"Non-existent key: {config.get('nonexistent.key', 'default_value')}")
     
-    # Test set
+    # test set
     print("\n" + "="*60)
     print("Testing set method:")
     config.set('test.new_value', 42)
     print(f"New value: {config.get('test.new_value')}")
     
-    # Test validation
+    # test validation
     print("\n" + "="*60)
     print(f"Config valid: {config.validate_config()}")
     
-    # Test update from dict
+    # test update from dict
     print("\n" + "="*60)
     updates = {
         'project': {
@@ -230,7 +229,7 @@ if __name__ == "__main__":
     print(f"Updated random seed: {config.get('project.random_seed')}")
     print(f"New section value: {config.get('new_section.value')}")
     
-    # Test save
+    # test save
     print("\n" + "="*60)
     os.makedirs('results/test', exist_ok=True)
     config.save_config('results/test/test_config.yaml')

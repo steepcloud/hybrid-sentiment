@@ -13,14 +13,8 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.data.data_loader import DatasetLoader
 from src.data.preprocessor import TextPreprocessor
-from src.models.classical_ml.logistic_regression import LogisticRegressionClassifier
-from src.models.classical_ml.random_forest import RandomForestClassifier
-from src.models.classical_ml.xgboost_classifier import XGBoostClassifier
-from src.models.deep_learning.lstm_encoder import LSTMEncoder
-from src.models.deep_learning.gru_encoder import GRUEncoder
-from src.models.deep_learning.transformer_encoder import TransformerEncoder
 from src.evaluation.metrics import calculate_metrics
-from src.utils.helpers import set_seed, save_results
+from src.utils.helpers import set_seed
 
 
 class ClassicalMLTrainer:
@@ -38,21 +32,21 @@ class ClassicalMLTrainer:
             encoder_type: Type of encoder ('lstm', 'gru', 'transformer', 'word2vec')
             encoder_path: Path to pre-trained encoder (if available)
         """
-        # Load config
+        # load config
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
         self.encoder_type = encoder_type
         self.encoder_path = encoder_path
         
-        # Set random seed
+        # set random seed
         set_seed(self.config['project']['random_seed'])
         
-        # Initialize components
+        # initialize components
         self.data_loader = DatasetLoader()
         self.preprocessor = TextPreprocessor()
         
-        # Set vocab size and max length from config
+        # set vocab size and max length from config
         self.preprocessor.max_vocab_size = self.config['data']['vocab_size']
         self.preprocessor.max_length = self.config['data']['max_length']
 
@@ -68,13 +62,13 @@ class ClassicalMLTrainer:
         print(f"\nLoading {self.encoder_type} encoder...")
         
         if self.encoder_path and os.path.exists(self.encoder_path):
-            # Load pre-trained encoder
+            # load pre-trained encoder
             print(f"  Loading from: {self.encoder_path}")
             checkpoint = torch.load(self.encoder_path, map_location=self.device)
             
             vocab_size = checkpoint.get('vocab_size', self.config['data']['vocab_size'])
             
-            # Create encoder based on type
+            # create encoder based on type
             if self.encoder_type == 'lstm':
                 from src.models.deep_learning.lstm_encoder import create_lstm_encoder_from_config
                 self.encoder = create_lstm_encoder_from_config(vocab_size=vocab_size)
@@ -85,7 +79,7 @@ class ClassicalMLTrainer:
                 from src.models.deep_learning.transformer_encoder import create_transformer_encoder_from_config
                 self.encoder = create_transformer_encoder_from_config(vocab_size=vocab_size)
             elif self.encoder_type in ['bert', 'roberta', 'distilbert']:
-                # Load BERT-based encoder
+                # load BERT-based encoder
                 from src.models.deep_learning.bert_encoder import BERTClassifier
                 model_name_map = {
                     'bert': 'bert-base-uncased',
@@ -95,18 +89,18 @@ class ClassicalMLTrainer:
                 model_name = model_name_map[self.encoder_type]
                 self.encoder = BERTClassifier(model_name=model_name)
             
-            # Load state dict for non-BERT models
+            # load state dict for non-BERT models
             if self.encoder_type not in ['bert', 'roberta', 'distilbert']:
                 self.encoder.load_state_dict(checkpoint['model_state_dict'])
             else:
-                # For BERT, load the full checkpoint
+                # for BERT, load the full checkpoint
                 self.encoder.load_state_dict(checkpoint['model_state_dict'])
             self.encoder.to(self.device)
             self.encoder.eval()
             print(f"✓ Encoder loaded successfully")
         else:
             print(f"  No pre-trained encoder found, using random initialization")
-            # Create encoder with random weights
+            # create encoder with random weights
             vocab_size = len(self.preprocessor.vocab) if hasattr(self.preprocessor, 'vocab') else self.config['data']['vocab_size']
             
             if self.encoder_type == 'lstm':
@@ -119,7 +113,7 @@ class ClassicalMLTrainer:
                 from src.models.deep_learning.transformer_encoder import create_transformer_encoder_from_config
                 self.encoder = create_transformer_encoder_from_config(vocab_size=vocab_size)
             elif self.encoder_type in ['bert', 'roberta', 'distilbert']:
-                # Create BERT encoder with random weights
+                # create BERT encoder with random weights
                 from src.models.deep_learning.bert_encoder import BERTClassifier
                 model_name_map = {
                     'bert': 'bert-base-uncased',
@@ -155,7 +149,7 @@ class ClassicalMLTrainer:
         is_bert = self.encoder_type in ['bert', 'roberta', 'distilbert']
 
         if is_bert:
-            # Use BERT tokenizer
+            # use BERT tokenizer
             tokenizer = self.encoder.encoder.tokenizer
         
         with torch.no_grad():
@@ -174,10 +168,10 @@ class ClassicalMLTrainer:
                     input_ids = encodings['input_ids'].to(self.device)
                     attention_mask = encodings['attention_mask'].to(self.device)
                     
-                    # Get embeddings
+                    # get embeddings
                     batch_embeddings = self.encoder.get_embeddings(input_ids, attention_mask)
                 else:
-                    # Tokenize and encode
+                    # tokenize and encode
                     batch_ids = []
                     batch_lengths = []
                     
@@ -190,7 +184,7 @@ class ClassicalMLTrainer:
                         batch_ids.append(ids)
                         batch_lengths.append(len(ids))
                     
-                    # Pad sequences
+                    # pad sequences
                     max_len = min(max(batch_lengths) if batch_lengths else 1, self.config['data']['max_length'])
                     padded_ids = np.zeros((len(batch_ids), max_len), dtype=np.int64)
                     
@@ -198,11 +192,11 @@ class ClassicalMLTrainer:
                         length = min(len(ids), max_len)
                         padded_ids[j, :length] = ids[:length]
                     
-                    # Convert to tensors
+                    # convert to tensors
                     input_ids = torch.LongTensor(padded_ids).to(self.device)
                     lengths = torch.LongTensor([min(l, max_len) for l in batch_lengths]).to(self.device)
                     
-                    # Get embeddings
+                    # get embeddings
                     if self.encoder_type == 'transformer':
                         batch_embeddings = self.encoder(input_ids, return_sequence=False)
                     else:
@@ -243,7 +237,7 @@ class ClassicalMLTrainer:
         print(f"Training {model_type.upper()}")
         print(f"{'='*60}")
         
-        # Create model
+        # create model
         if model_type == 'logistic_regression':
             from src.models.classical_ml.logistic_regression import create_logistic_regression_from_config
             model = create_logistic_regression_from_config()
@@ -256,7 +250,7 @@ class ClassicalMLTrainer:
         else:
             raise ValueError(f"Unknown model type: {model_type}")
         
-        # Train
+        # train
         train_metrics = model.fit(X_train, y_train, X_val, y_val)
         
         return model, train_metrics
@@ -280,11 +274,11 @@ class ClassicalMLTrainer:
         """
         print(f"\nEvaluating on test set...")
         
-        # Predictions
+        # predictions
         y_pred = model.predict(X_test)
         y_proba = model.predict_proba(X_test)
         
-        # Calculate metrics
+        # calculate metrics
         metrics = calculate_metrics(y_test, y_pred, y_proba)
         
         print(f"\nTest Results:")
@@ -315,19 +309,19 @@ class ClassicalMLTrainer:
         print(f"Training Classical ML Models on {dataset.upper()}")
         print(f"{'='*60}")
         
-        # Load data
+        # load data
         print("\nLoading dataset...")
         train_df, val_df, test_df = self.data_loader.load_dataset(dataset, use_cache=True)
         
-        # Build vocabulary
+        # build vocabulary
         print("\nBuilding vocabulary...")
         all_texts = train_df['text'].tolist()
         self.preprocessor.build_vocab(all_texts)
         
-        # Load encoder
+        # load encoder
         self.load_encoder()
         
-        # Extract embeddings
+        # extract embeddings
         X_train = self.extract_embeddings(train_df['text'].tolist())
         y_train = train_df['label'].values
         
@@ -337,7 +331,7 @@ class ClassicalMLTrainer:
         X_test = self.extract_embeddings(test_df['text'].tolist())
         y_test = test_df['label'].values
         
-        # Train models
+        # train models
         results = {}
         model_types = ['logistic_regression', 'random_forest', 'xgboost']
         
@@ -354,14 +348,14 @@ class ClassicalMLTrainer:
                 'model': model
             }
             
-            # Save model
+            # save model
             if save_models:
                 save_dir = f"results/models/classical_ml/{dataset}/{self.encoder_type}"
                 os.makedirs(save_dir, exist_ok=True)
                 model_path = os.path.join(save_dir, f"{model_type}.pkl")
                 model.save_model(model_path)
         
-        # Save results summary
+        # save results summary
         self._save_results_summary(results, dataset)
         
         return results
@@ -374,7 +368,7 @@ class ClassicalMLTrainer:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         results_path = os.path.join(save_dir, f"results_{timestamp}.pkl")
         
-        # Prepare results (remove model objects for pickling)
+        # prepare results (remove model objects for pickling)
         results_to_save = {}
         for model_type, data in results.items():
             results_to_save[model_type] = {
@@ -387,7 +381,6 @@ class ClassicalMLTrainer:
         
         print(f"\n✓ Results saved to {results_path}")
         
-        # Print summary
         print(f"\n{'='*60}")
         print("RESULTS SUMMARY")
         print(f"{'='*60}")
@@ -416,14 +409,14 @@ def main():
     
     args = parser.parse_args()
     
-    # Create trainer
+    # create trainer
     trainer = ClassicalMLTrainer(
         config_path=args.config,
         encoder_type=args.encoder,
         encoder_path=args.encoder_path
     )
     
-    # Train all models
+    # train all models
     results = trainer.train_all_models(
         dataset=args.dataset,
         save_models=True

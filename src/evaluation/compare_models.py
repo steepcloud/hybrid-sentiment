@@ -50,7 +50,7 @@ class ModelComparator:
             with open(file, 'rb') as f:
                 data = pickle.load(f)
                 
-                # Extract model name from file
+                # extract model name from file
                 model_name = file.stem
                 
                 if isinstance(data, dict):
@@ -108,7 +108,7 @@ class ModelComparator:
             dataset: Dataset to compare on
             save_path: Optional path to save figure
         """
-        # Extract data
+        # extract data
         model_names = []
         values = []
         
@@ -117,7 +117,7 @@ class ModelComparator:
                 model_names.append(model_name)
                 values.append(datasets[dataset].get(metric, 0))
         
-        # Create plot
+        # create plot
         plt.figure(figsize=(12, 6))
         bars = plt.bar(range(len(model_names)), values, color='steelblue')
         plt.xticks(range(len(model_names)), model_names, rotation=45, ha='right')
@@ -126,7 +126,7 @@ class ModelComparator:
         plt.ylim(0, 1.0)
         plt.grid(axis='y', alpha=0.3)
         
-        # Add value labels on bars
+        # add value labels on bars
         for bar, value in zip(bars, values):
             height = bar.get_height()
             plt.text(bar.get_x() + bar.get_width()/2., height,
@@ -155,7 +155,7 @@ class ModelComparator:
         """
         metrics = ['accuracy', 'precision', 'recall', 'f1', 'roc_auc']
         
-        # Extract data
+        # extract data
         model_names = []
         data = {metric: [] for metric in metrics}
         
@@ -165,7 +165,7 @@ class ModelComparator:
                 for metric in metrics:
                     data[metric].append(datasets[dataset].get(metric, 0))
         
-        # Create plot
+        # create plot
         fig, axes = plt.subplots(1, len(metrics), figsize=(20, 5))
         
         for idx, metric in enumerate(metrics):
@@ -178,7 +178,7 @@ class ModelComparator:
             ax.set_ylim(0, 1.0)
             ax.grid(axis='y', alpha=0.3)
             
-            # Add value labels
+            # add value labels
             for bar, value in zip(bars, data[metric]):
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2., height,
@@ -227,13 +227,13 @@ class ModelComparator:
         Returns:
             Dictionary with test results
         """
-        # Extract accuracies by model
+        # extract accuracies by model
         model_accuracies = {}
         for model_name, datasets in self.results.items():
             if dataset in datasets:
-                # Use accuracy as primary metric
+                # use accuracy as primary metric
                 acc = datasets[dataset].get('accuracy', 0)
-                model_accuracies[model_name] = [acc]  # Single value, but in list for consistency
+                model_accuracies[model_name] = [acc]  # single value, but in list for consistency
         
         if len(model_accuracies) < 2:
             print("⚠️  Need at least 2 models for statistical tests")
@@ -245,14 +245,14 @@ class ModelComparator:
         
         # Note: With single values per model, we can't do proper ANOVA
         # Instead, compare F1 scores as point estimates
-        print("\n📊 Model Performance Summary:")
+        print("\nModel Performance Summary:")
         sorted_models = sorted(model_accuracies.items(), key=lambda x: x[1][0], reverse=True)
         for model, acc_list in sorted_models:
             metrics = self.results[model][dataset]
             print(f"  {model:30s}: Acc={metrics['accuracy']:.4f}, F1={metrics['f1']:.4f}, AUC={metrics['roc_auc']:.4f}")
         
-        # Calculate performance differences
-        print("\n📈 Performance Gaps (vs Best Model):")
+        # calculate performance differences
+        print("\nPerformance Gaps (vs Best Model):")
         best_model, best_acc = sorted_models[0]
         print(f"  Best: {best_model} (Acc={best_acc[0]:.4f})")
         
@@ -288,12 +288,12 @@ class ModelComparator:
         
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
         
-        # Left: Model ranking with confidence intervals (based on metric spread)
+        # left: Model ranking with confidence intervals (based on metric spread)
         sorted_models = stats_results['summary']
         model_names = [m[0] for m in sorted_models]
         accuracies = [m[1][0] for m in sorted_models]
         
-        # Get F1 scores for comparison
+        # get F1 scores for comparison
         f1_scores = [self.results[m[0]][dataset]['f1'] for m in sorted_models]
         
         y_pos = np.arange(len(model_names))
@@ -309,15 +309,15 @@ class ModelComparator:
         ax1.legend()
         ax1.grid(axis='x', alpha=0.3)
         
-        # Add value labels
+        # add value labels
         for i, (acc, f1) in enumerate(zip(accuracies, f1_scores)):
             ax1.text(acc, i, f' {acc:.4f}', va='center', fontsize=9)
         
-        # Right: Performance gaps
+        # right: Performance gaps
         if 'performance_gaps' in stats_results:
             gaps_data = stats_results['performance_gaps']
             gap_models = [g['model'] for g in gaps_data]
-            gap_values = [g['gap'] * 100 for g in gaps_data]  # Convert to percentage
+            gap_values = [g['gap'] * 100 for g in gaps_data]  # convert to percentage
             
             colors = ['red' if g > 2 else 'orange' if g > 1 else 'yellow' for g in gap_values]
             
@@ -329,7 +329,7 @@ class ModelComparator:
             ax2.set_title(f'Gap from Best Model ({stats_results["best_model"]})')
             ax2.grid(axis='x', alpha=0.3)
             
-            # Add value labels
+            # add value labels
             for i, gap in enumerate(gap_values):
                 ax2.text(gap, i, f' {gap:.2f}%', va='center', fontsize=9)
         
@@ -350,12 +350,12 @@ class ModelComparator:
         """
         df = self.create_comparison_table()
         
-        # Save as CSV
+        # save as CSV
         csv_path = save_path.replace('.pkl', '.csv')
         df.to_csv(csv_path, index=False)
         print(f"Comparison saved to {csv_path}")
         
-        # Save full results as pickle
+        # save full results as pickle
         with open(save_path, 'wb') as f:
             pickle.dump(self.results, f)
         print(f"Full results saved to {save_path}")
@@ -385,7 +385,7 @@ def main():
     # ============================================================
     dl_models_dir = Path(f'results/models/deep_learning/{args.dataset}')
     
-    print("\n📊 Loading End-to-End Deep Learning Models...")
+    print("\nLoading End-to-End Deep Learning Models...")
     print(f"   Checking: {dl_models_dir}")
     
     if dl_models_dir.exists():
@@ -396,7 +396,7 @@ def main():
                 model_type = model_dir.name  # lstm, gru, transformer
                 print(f"   Checking {model_type}/...")
                 
-                # Look for model checkpoint (has metadata)
+                # look for model checkpoint (has metadata)
                 checkpoint_files = list(model_dir.glob('*_best.pt'))
                 
                 if checkpoint_files:
@@ -407,8 +407,8 @@ def main():
                         
                         print(f"     Checkpoint keys: {list(checkpoint.keys())}")
                         
-                        # Extract metrics from checkpoint
-                        # Use validation metrics as proxy for test (best we have)
+                        # extract metrics from checkpoint
+                        # use validation metrics as proxy for test (best we have)
                         if 'val_f1' in checkpoint:
                             test_metrics = {
                                 'f1': checkpoint.get('val_f1', 0),
@@ -438,7 +438,7 @@ def main():
     # ============================================================
     hybrid_models_dir = Path(f'results/classical_ml/{args.dataset}')
     
-    print(f"\n🔄 Loading Hybrid Models (Encoder + Classical ML)...")
+    print(f"\nLoading Hybrid Models (Encoder + Classical ML)...")
     print(f"   Checking: {hybrid_models_dir}")
     
     if hybrid_models_dir.exists():
@@ -449,12 +449,12 @@ def main():
                 encoder_type = encoder_dir.name  # lstm, gru, transformer
                 print(f"   Checking {encoder_type}/...")
                 
-                # Look for results pickle
+                # look for results pickle
                 results_files = list(encoder_dir.glob('results_*.pkl'))
                 print(f"     Found {len(results_files)} result files")
                 
                 if results_files:
-                    results_file = results_files[-1]  # Latest results
+                    results_file = results_files[-1]  # latest results
                     
                     try:
                         with open(results_file, 'rb') as f:
@@ -462,7 +462,7 @@ def main():
                         
                         print(f"     Loaded pickle, keys: {list(results.keys())}")
                         
-                        # Results structure: {classifier_name: {train/val/test metrics}}
+                        # results structure: {classifier_name: {train/val/test metrics}}
                         for classifier_name, metrics_dict in results.items():
                             if isinstance(metrics_dict, dict) and 'test_metrics' in metrics_dict:
                                 test_metrics = metrics_dict['test_metrics']
@@ -503,31 +503,31 @@ def main():
     best_acc_model, best_acc = comparator.find_best_model('accuracy', 'test')
     best_auc_model, best_auc = comparator.find_best_model('roc_auc', 'test')
     
-    print(f"\n🏆 Best F1 Score:    {best_f1_model:<30} {best_f1:.4f}")
-    print(f"🏆 Best Accuracy:    {best_acc_model:<30} {best_acc:.4f}")
-    print(f"🏆 Best ROC-AUC:     {best_auc_model:<30} {best_auc:.4f}")
+    print(f"\n Best F1 Score:    {best_f1_model:<30} {best_f1:.4f}")
+    print(f" Best Accuracy:    {best_acc_model:<30} {best_acc:.4f}")
+    print(f" Best ROC-AUC:     {best_auc_model:<30} {best_auc:.4f}")
     
     # ============================================================
     # Generate Visualizations
     # ============================================================
-    print("\n📊 Generating comparison plots...")
+    print("\nGenerating comparison plots...")
     
     os.makedirs(args.output_dir, exist_ok=True)
     
-    # Plot all metrics
+    # plot all metrics
     comparator.plot_all_metrics(
         dataset='test',
         save_path=f'{args.output_dir}/{args.dataset}_all_metrics.png'
     )
     
-    # Plot F1 comparison
+    # plot F1 comparison
     comparator.plot_metric_comparison(
         metric='f1',
         dataset='test',
         save_path=f'{args.output_dir}/{args.dataset}_f1_comparison.png'
     )
     
-    # Plot accuracy comparison
+    # plot accuracy comparison
     comparator.plot_metric_comparison(
         metric='accuracy',
         dataset='test',
@@ -537,7 +537,7 @@ def main():
     # ============================================================
     # Statistical Analysis
     # ============================================================
-    print("\n📊 Performing statistical analysis...")
+    print("\nPerforming statistical analysis...")
     stats_results = comparator.perform_statistical_tests(dataset='test')
 
     if stats_results:
@@ -547,7 +547,7 @@ def main():
             save_path=f'{args.output_dir}/{args.dataset}_statistical_summary.png'
         )
         
-        # Save statistical results to text file
+        # save statistical results to text file
         stats_output = f'{args.output_dir}/{args.dataset}_statistical_analysis.txt'
         with open(stats_output, 'w') as f:
             f.write("="*70 + "\n")
@@ -564,7 +564,7 @@ def main():
     # ============================================================
     # Save Results
     # ============================================================
-    print("\n💾 Saving comparison results...")
+    print("\nSaving comparison results...")
     comparator.save_comparison(f'{args.output_dir}/{args.dataset}_comparison.pkl')
     
     print("\n" + "="*70)

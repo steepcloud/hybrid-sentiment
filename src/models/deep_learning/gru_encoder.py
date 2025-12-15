@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import yaml
-from typing import Tuple, Optional
+from typing import Optional
 
 
 class GRUEncoder(nn.Module):
@@ -42,18 +42,18 @@ class GRUEncoder(nn.Module):
         self.num_directions = 2 if bidirectional else 1
         self.padding_idx = padding_idx
         
-        # Embedding layer
+        # embedding layer
         self.embedding = nn.Embedding(
             vocab_size, 
             embedding_dim, 
             padding_idx=padding_idx
         )
         
-        # Load pretrained embeddings if provided
+        # load pretrained embeddings if provided
         if pretrained_embeddings is not None:
             self.embedding.weight.data.copy_(pretrained_embeddings)
         
-        # Freeze embeddings if specified
+        # freeze embeddings if specified
         if freeze_embeddings:
             self.embedding.weight.requires_grad = False
         
@@ -67,10 +67,10 @@ class GRUEncoder(nn.Module):
             bidirectional=bidirectional
         )
         
-        # Dropout layer
+        # dropout layer
         self.dropout = nn.Dropout(dropout)
         
-        # Output dimension (for embeddings)
+        # output dimension (for embeddings)
         self.output_dim = hidden_dim * self.num_directions
     
     def forward(
@@ -90,17 +90,17 @@ class GRUEncoder(nn.Module):
         Returns:
             embeddings: [batch_size, output_dim] or [batch_size, seq_length, output_dim]
         """
-        # Get embeddings
+        # get embeddings
         embedded = self.embedding(input_ids)  # [batch_size, seq_length, embedding_dim]
         embedded = self.dropout(embedded)
         
-        # Pack sequences if lengths provided
+        # pack sequences if lengths provided
         if lengths is not None:
-            # Sort by length (required for pack_padded_sequence)
+            # sort by length (required for pack_padded_sequence)
             lengths_sorted, sorted_idx = lengths.sort(descending=True)
             embedded_sorted = embedded[sorted_idx]
             
-            # Pack
+            # pack
             packed = nn.utils.rnn.pack_padded_sequence(
                 embedded_sorted, 
                 lengths_sorted.cpu(), 
@@ -111,27 +111,27 @@ class GRUEncoder(nn.Module):
             # GRU forward
             packed_output, hidden = self.gru(packed)
             
-            # Unpack
+            # unpack
             output, _ = nn.utils.rnn.pad_packed_sequence(packed_output, batch_first=True)
             
-            # Unsort
+            # unsort
             _, unsorted_idx = sorted_idx.sort()
             output = output[unsorted_idx]
             hidden = hidden[:, unsorted_idx, :]
         else:
-            # Standard GRU forward
+            # standard GRU forward
             output, hidden = self.gru(embedded)
         
         # output: [batch_size, seq_length, hidden_dim * num_directions]
         # hidden: [num_layers * num_directions, batch_size, hidden_dim]
         
         if return_sequence:
-            # Return full sequence output
+            # return full sequence output
             return self.dropout(output)
         else:
-            # Return final embedding (concatenate final hidden states)
+            # return final embedding (concatenate final hidden states)
             if self.bidirectional:
-                # Concatenate forward and backward final hidden states
+                # concatenate forward and backward final hidden states
                 # hidden[-2]: forward, hidden[-1]: backward
                 final_hidden = torch.cat((hidden[-2], hidden[-1]), dim=1)
             else:
@@ -188,7 +188,7 @@ class GRUClassifier(nn.Module):
             padding_idx=padding_idx
         )
         
-        # Classification head
+        # classification head
         self.classifier = nn.Sequential(
             nn.Linear(self.encoder.output_dim, hidden_dim),
             nn.ReLU(),
@@ -207,10 +207,10 @@ class GRUClassifier(nn.Module):
         Returns:
             logits: [batch_size, num_classes]
         """
-        # Get embeddings from encoder
+        # get embeddings from encoder
         embeddings = self.encoder(input_ids, lengths, return_sequence=False)
         
-        # Classify
+        # classify
         logits = self.classifier(embeddings)
         
         return logits

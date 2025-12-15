@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import pickle
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 import time
 import yaml
 
@@ -35,18 +35,18 @@ class HybridSentimentPredictor:
         self.encoder_path = Path(encoder_path)
         self.classifier_path = Path(classifier_path)
         
-        # Load config
+        # load config
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        # Initialize preprocessor
+        # initialize preprocessor
         self.preprocessor = TextPreprocessor(config_path=config_path)
         
-        # Determine device
+        # determine device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Using device: {self.device}")
         
-        # Load models
+        # load models
         self._load_encoder()
         self._load_classifier()
         
@@ -55,17 +55,23 @@ class HybridSentimentPredictor:
         print(f"  Classifier: {self.classifier_path.name}")
     
     def _load_encoder(self):
-        """Load the encoder model (LSTM/GRU/Transformer)."""
+        """Load the encoder model (LSTM/GRU/Transformer/BERT/ROBERTA/DISTILBERT)."""
         print(f"Loading encoder from {self.encoder_path}...")
         
-        # Load checkpoint
+        # load checkpoint
         checkpoint = torch.load(self.encoder_path, map_location=self.device)
         
-        # Infer model type from file path if not in checkpoint
+        # infer model type from file path if not in checkpoint
         model_type = checkpoint.get('model_type')
         if not model_type:
             path_lower = str(self.encoder_path).lower()
-            if 'gru' in path_lower:
+            if 'distilbert' in path_lower:
+                model_type = 'distilbert'
+            elif 'roberta' in path_lower:
+                model_type = 'roberta'
+            elif 'bert' in path_lower:
+                model_type = 'bert'
+            elif 'gru' in path_lower:
                 model_type = 'gru'
             elif 'transformer' in path_lower:
                 model_type = 'transformer'
@@ -76,10 +82,10 @@ class HybridSentimentPredictor:
         
         print(f"  Model type: {model_type}")
 
-        # Get config from checkpoint or use defaults
+        # get config from checkpoint or use defaults
         model_config = checkpoint.get('config', {})
 
-        # If config is empty, infer from model_state_dict
+        # if config is empty, infer from model_state_dict
         if not model_config:
             state_dict = checkpoint['model_state_dict']
             embedding_key = 'encoder.embedding.weight'
@@ -106,11 +112,11 @@ class HybridSentimentPredictor:
                 elif model_type == 'transformer':
                     hidden_dim = 256  # Default
             
-                    # Infer num_layers from transformer layers
+                    # infer num_layers from transformer layers
                     layer_keys = [k for k in state_dict.keys() if 'encoder.transformer_encoder.layers.' in k and 'self_attn.in_proj_weight' in k]
                     num_layers = len(set(k.split('.')[3] for k in layer_keys)) if layer_keys else 3
                     
-                    # Infer max_len from pos_encoder
+                    # infer max_len from pos_encoder
                     pos_encoder_key = 'encoder.pos_encoder.pe'
                     max_len = state_dict[pos_encoder_key].shape[1] if pos_encoder_key in state_dict else 512
                     
@@ -125,7 +131,7 @@ class HybridSentimentPredictor:
 
                 print(f"  Inferred config: {model_config}")
 
-        # Initialize encoder
+        # initialize encoder
         if model_type == 'lstm':
             self.encoder = LSTMClassifier(
                 vocab_size=model_config['vocab_size'],
@@ -151,17 +157,26 @@ class HybridSentimentPredictor:
                 max_seq_length=model_config.get('max_len', 512),
                 dropout=model_config.get('dropout', 0.1)
             )
+        elif model_type in ['bert', 'roberta', 'distilbert']:
+            from src.models.deep_learning.bert_encoder import BERTClassifier
+            model_name_map = {
+                'bert': 'bert-base-uncased',
+                'roberta': 'roberta-base',
+                'distilbert': 'distilbert-base-uncased'
+            }
+            model_name = model_name_map[model_type]
+            self.encoder = BERTClassifier(model_name=model_name)
         
-        # Load weights
+        # load weights
         self.encoder.load_state_dict(checkpoint['model_state_dict'])
         self.encoder.to(self.device)
         self.encoder.eval()
         
-        # Store vocab (if available)
+        # store vocab (if available)
         self.vocab = checkpoint.get('vocab', {})
         self.word_to_idx = checkpoint.get('word_to_idx', self.vocab)
 
-        # If no vocab in checkpoint, load from embeddings folder
+        # if no vocab in checkpoint, load from embeddings folder
         if not self.word_to_idx:
             print("  [!] No vocab in checkpoint, loading from embeddings...")
             if 'imdb' in str(self.encoder_path).lower():
@@ -175,7 +190,6 @@ class HybridSentimentPredictor:
                 with open(vocab_path, 'rb') as f:
                     vocab_data = pickle.load(f)
                     
-                    # FIX: vocab_data['vocab'] IS the word_to_idx mapping!
                     if isinstance(vocab_data, dict) and 'vocab' in vocab_data:
                         self.word_to_idx = vocab_data['vocab']
                     else:
@@ -194,16 +208,16 @@ class HybridSentimentPredictor:
         
         classifier_name = self.classifier_path.stem.lower()
         
-        # Load with joblib (all classifiers use this format)
+        # load with joblib (all classifiers use this format)
         try:
             import joblib
             model_data = joblib.load(self.classifier_path)
             
-            # Extract the actual model from the dict
+            # extract the actual model from the dict
             if isinstance(model_data, dict) and 'model' in model_data:
                 self.classifier = model_data['model']
             else:
-                # Fallback: assume it's the model directly
+                # fallback: assume it's the model directly
                 self.classifier = model_data
             
             print(f"  ✓ Classifier loaded: {type(self.classifier).__name__}")
@@ -215,16 +229,16 @@ class HybridSentimentPredictor:
         """
         Convert text to indices.
         """
-        # Preprocess text
+        # preprocess text
         tokens = self.preprocessor.tokenize(text)
         
-        # Convert to indices
+        # convert to indices
         indices = [self.word_to_idx.get(token, self.word_to_idx.get('<UNK>', 1)) 
                    for token in tokens[:max_len]]
         
         actual_length = len(indices)
         
-        # Pad or truncate
+        # pad or truncate
         if len(indices) < max_len:
             indices += [self.word_to_idx.get('<PAD>', 0)] * (max_len - len(indices))
         else:
@@ -242,20 +256,39 @@ class HybridSentimentPredictor:
         Returns:
             Feature vector (numpy array)
         """
-        # Convert text to indices
-        indices, actual_length = self._text_to_indices(text)
-        
-        if indices.dim() == 1:
-            # This is the correct action if _text_to_indices returns 1D [L]
-            indices = indices.unsqueeze(0).to(self.device)
-        elif indices.dim() == 2:
-            indices = indices.to(self.device)
+        if hasattr(self.encoder, 'encoder') and hasattr(self.encoder.encoder, 'tokenizer'):
+            # BERT tokenization
+            tokenizer = self.encoder.encoder.tokenizer
+            encodings = tokenizer(
+                text,
+                truncation=True,
+                padding='max_length',
+                max_length=512,
+                return_tensors='pt'
+            )
+            input_ids = encodings['input_ids'].to(self.device)
+            attention_mask = encodings['attention_mask'].to(self.device)
+            
+            # extract features
+            with torch.no_grad():
+                features = self.encoder.get_embeddings(input_ids, attention_mask)
+            
+            return features.cpu().numpy().flatten()
+        else:
+            # convert text to indices
+            indices, actual_length = self._text_to_indices(text)
+            
+            if indices.dim() == 1:
+                # this is the correct action if _text_to_indices returns 1D [L]
+                indices = indices.unsqueeze(0).to(self.device)
+            elif indices.dim() == 2:
+                indices = indices.to(self.device)
 
-        # Extract features
-        with torch.no_grad():
-            features = self.encoder.get_embeddings(indices)
-        
-        return features.cpu().numpy().flatten()
+            # extract features
+            with torch.no_grad():
+                features = self.encoder.get_embeddings(indices)
+            
+            return features.cpu().numpy().flatten()
     
     def predict(self, text: str) -> Dict:
         """
@@ -276,39 +309,51 @@ class HybridSentimentPredictor:
         print(f"\n🔍 INFERENCE DEBUG:")
         print(f"   Input text: {text}")
         
-        # Extract features
+        # extract features
         features = self._extract_features(text)
         print(f"   Features shape: {features.shape}")
         print(f"   Features sample (first 10): {features[:10]}")
         
-        # Predict with classifier
+        # predict with classifier
         prediction = self.classifier.predict([features])[0]
         print(f"   Raw prediction: {prediction} (0=negative, 1=positive)")
         
-        # Get probabilities if available
+        # get probabilities if available
         if hasattr(self.classifier, 'predict_proba'):
             probabilities = self.classifier.predict_proba([features])[0]
         else:
-            # For models without predict_proba, use binary prediction
+            # for models without predict_proba, use binary prediction
             probabilities = [1 - prediction, prediction]
         
         print(f"   Probabilities: {probabilities}")
         print(f"   Probability[0] (negative): {probabilities[0]:.4f}")
         print(f"   Probability[1] (positive): {probabilities[1]:.4f}")
         
-        processing_time = (time.time() - start_time) * 1000  # Convert to ms
+        is_bert = hasattr(self.encoder, 'encoder') and hasattr(self.encoder.encoder, 'tokenizer')
+    
+        if is_bert:
+            # BERT: 0=positive, 1=negative
+            sentiment = 'positive' if prediction == 1 else 'negative'
+            # swap probabilities to [neg, pos] format
+            probabilities_swapped = [float(probabilities[1]), float(probabilities[0])]
+        else:
+            # Traditional: 0=negative, 1=positive
+            sentiment = 'positive' if prediction == 0 else 'negative'
+            probabilities_swapped = [float(probabilities[0]), float(probabilities[1])]
         
-        sentiment = 'positive' if prediction == 0 else 'negative'
-        confidence = max(probabilities)
+        processing_time = (time.time() - start_time) * 1000  # convert to ms
+
+        confidence = float(max(probabilities_swapped))
         
+        print(f"   Encoder type: {'BERT' if is_bert else 'Traditional'}")
         print(f"   Final sentiment: {sentiment}")
         print(f"   Final confidence: {confidence:.4f}\n")
 
         return {
             'sentiment': sentiment,
             'confidence': float(confidence),
-            'probabilities': [float(p) for p in probabilities],
-            'processing_time_ms': processing_time
+            'probabilities': [float(p) for p in probabilities_swapped],
+            'processing_time_ms': float(processing_time)
         }
     
     def predict_batch(self, texts: List[str], batch_size: int = 32) -> List[Dict]:
@@ -327,7 +372,7 @@ class HybridSentimentPredictor:
         for i in range(0, len(texts), batch_size):
             batch_texts = texts[i:i + batch_size]
             
-            # Extract features for batch
+            # extract features for batch
             batch_features = []
             for text in batch_texts:
                 features = self._extract_features(text)
@@ -335,7 +380,7 @@ class HybridSentimentPredictor:
             
             batch_features = np.array(batch_features)
             
-            # Predict
+            # predict
             predictions = self.classifier.predict(batch_features)
             
             if hasattr(self.classifier, 'predict_proba'):
@@ -343,7 +388,7 @@ class HybridSentimentPredictor:
             else:
                 probabilities = [[1 - p, p] for p in predictions]
             
-            # Format results
+            # format results
             for pred, probs in zip(predictions, probabilities):
                 sentiment = 'positive' if pred == 0 else 'negative'
                 confidence = max(probs)
@@ -377,17 +422,17 @@ class EndToEndPredictor:
         """
         self.model_path = Path(model_path)
         
-        # Load config
+        #load config
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        # Initialize preprocessor
+        # initialize preprocessor
         self.preprocessor = TextPreprocessor(config_path=config_path)
         
-        # Determine device
+        # determine device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # Load model
+        # load model
         self._load_model()
         
         print(f"✓ End-to-end model loaded: {self.model_path.name}")
@@ -398,11 +443,17 @@ class EndToEndPredictor:
         
         checkpoint = torch.load(self.model_path, map_location=self.device)
         
-        # Infer model type from file path if not in checkpoint
+        # infer model type from file path if not in checkpoint
         model_type = checkpoint.get('model_type')
         if not model_type:
             path_lower = str(self.model_path).lower()
-            if 'gru' in path_lower:
+            if 'distilbert' in path_lower:
+                model_type = 'distilbert'
+            elif 'roberta' in path_lower:
+                model_type = 'roberta'
+            elif 'bert' in path_lower:
+                model_type = 'bert'
+            elif 'gru' in path_lower:
                 model_type = 'gru'
             elif 'transformer' in path_lower:
                 model_type = 'transformer'
@@ -413,10 +464,10 @@ class EndToEndPredictor:
         
         print(f"  Model type: {model_type}")
         
-        # Get config from checkpoint or infer it
+        # get config from checkpoint or infer it
         model_config = checkpoint.get('config', {})
         
-        # If config is empty, infer from model_state_dict (same logic as HybridSentimentPredictor)
+        # if config is empty, infer from model_state_dict (same logic as HybridSentimentPredictor)
         if not model_config:
             state_dict = checkpoint['model_state_dict']
             embedding_key = 'encoder.embedding.weight'
@@ -444,7 +495,7 @@ class EndToEndPredictor:
                 }
                 print(f"  Inferred config: {model_config}")
         
-        # Initialize model
+        # initialize model
         if model_type == 'lstm':
             self.model = LSTMClassifier(
                 vocab_size=model_config['vocab_size'],
@@ -469,13 +520,25 @@ class EndToEndPredictor:
                 num_layers=model_config['num_layers'],
                 dropout=model_config.get('dropout', 0.1)
             )
+        elif model_type in ['bert', 'roberta', 'distilbert']:
+            # load BERT-based model
+            from src.models.deep_learning.bert_encoder import BERTClassifier
+            model_name_map = {
+                'bert': 'bert-base-uncased',
+                'roberta': 'roberta-base',
+                'distilbert': 'distilbert-base-uncased'
+            }
+            model_name = model_name_map[model_type]
+            self.model = BERTClassifier(model_name=model_name)
+        else:
+            raise ValueError(f"Unknown model type: {model_type}")
         
-        # Load weights
+        # load weights
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.to(self.device)
         self.model.eval()
         
-        # Load vocab (same logic as HybridSentimentPredictor)
+        # load vocab (same logic as HybridSentimentPredictor)
         self.vocab = checkpoint.get('vocab', {})
         self.word_to_idx = checkpoint.get('word_to_idx', self.vocab)
         
@@ -533,37 +596,66 @@ class EndToEndPredictor:
     def predict(self, text: str) -> Dict:
         """Predict sentiment for a single text."""
         start_time = time.time()
-        
-        # Convert to indices
-        indices, actual_length = self._text_to_indices(text)
-        indices = indices.to(self.device)
 
-        sequence_length = torch.tensor([actual_length], dtype=torch.long).to(self.device)
+        model_type = None
+        if hasattr(self.model, 'encoder') and hasattr(self.model.encoder, 'tokenizer'):
+            model_type = 'bert' # BERT/RoBERTa/DistilBERT
         
-        # Predict
-        with torch.no_grad():
-            logits = self.model(indices, sequence_length)
-            probabilities = torch.softmax(logits, dim=1).cpu().numpy()[0]
-            prediction = np.argmax(probabilities)
+        if model_type == 'bert':
+            # BERT tokenization
+            tokenizer = self.model.encoder.tokenizer
+            encodings = tokenizer(
+                text,
+                truncation=True,
+                padding='max_length',
+                max_length=512,
+                return_tensors='pt'
+            )
+            input_ids = encodings['input_ids'].to(self.device)
+            attention_mask = encodings['attention_mask'].to(self.device)
+            
+            # predict
+            with torch.no_grad():
+                logits = self.model(input_ids, attention_mask)
+                probabilities = torch.softmax(logits, dim=1).cpu().numpy()[0]
+                prediction = np.argmax(probabilities)
+            
+            sentiment = 'positive' if prediction == 1 else 'negative'
+            confidence = float(probabilities[prediction])
+            # swap probabilities to match traditional format [neg, pos]
+            probabilities_swapped = [float(probabilities[1]), float(probabilities[0])]
+        else:
+            # convert to indices
+            indices, actual_length = self._text_to_indices(text)
+            indices = indices.to(self.device)
+
+            sequence_length = torch.tensor([actual_length], dtype=torch.long).to(self.device)
+            
+            # predict
+            with torch.no_grad():
+                logits = self.model(indices, sequence_length)
+                probabilities = torch.softmax(logits, dim=1).cpu().numpy()[0]
+                prediction = np.argmax(probabilities)
+            
+            sentiment = 'positive' if prediction == 0 else 'negative'
+            confidence = float(probabilities[prediction])
+            probabilities_swapped = [float(probabilities[0]), float(probabilities[1])]  # Already [neg, pos]
         
         processing_time = (time.time() - start_time) * 1000
 
         # DEBUG: Print raw values
-        print(f"\n🔍 END-TO-END DEBUG:")
+        print(f"\nEND-TO-END DEBUG:")
         print(f"   Text: {text}")
         print(f"   Logits: {logits.cpu().numpy()[0]}")
         print(f"   Probabilities: {probabilities}")
         print(f"   Prediction (argmax): {prediction}")
         print(f"   Prob[0]: {probabilities[0]:.4f}, Prob[1]: {probabilities[1]:.4f}\n")
         
-        sentiment = 'positive' if prediction == 0 else 'negative'
-        confidence = float(probabilities[prediction])
-        
         return {
             'sentiment': sentiment,
-            'confidence': confidence,
-            'probabilities': [float(p) for p in probabilities],
-            'processing_time_ms': processing_time
+            'confidence': float(confidence),
+            'probabilities': probabilities_swapped,
+            'processing_time_ms': float(processing_time)
         }
     
     def predict_batch(self, texts: List[str]) -> List[Dict]:

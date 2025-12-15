@@ -43,7 +43,7 @@ class RandomForestClassifier:
         self.random_state = random_state
         self.n_jobs = n_jobs
         
-        # Initialize model
+        # initialize model
         self.model = SKRandomForest(
             n_estimators=n_estimators,
             max_depth=max_depth,
@@ -56,7 +56,7 @@ class RandomForestClassifier:
             n_jobs=n_jobs
         )
         
-        # Training info
+        # training info
         self.is_trained = False
         self.feature_dim = None
         self.classes = None
@@ -89,13 +89,13 @@ class RandomForestClassifier:
         
         self.feature_dim = X_train.shape[1]
         
-        # Train model
+        # train model
         self.model.fit(X_train, y_train)
         
         self.is_trained = True
         self.classes = self.model.classes_
         
-        # Calculate metrics
+        # calculate metrics
         metrics = {
             'train_accuracy': self.model.score(X_train, y_train),
             'n_trees': len(self.model.estimators_)
@@ -171,10 +171,10 @@ class RandomForestClassifier:
         if not self.is_trained:
             raise ValueError("Model not trained. Call fit() first.")
         
-        # Get feature importances
+        # get feature importances
         importances = self.model.feature_importances_
         
-        # Get indices sorted by importance
+        # get indices sorted by importance
         indices = np.argsort(importances)[::-1][:top_n]
         values = importances[indices]
         
@@ -280,7 +280,7 @@ def create_random_forest_from_config(
     
     rf_config = config['classical_ml']['random_forest']
     
-    # Handle single values or lists (for hyperparameter tuning)
+    # handle single values or lists (for hyperparameter tuning)
     n_estimators = rf_config.get('n_estimators', 100)
     if isinstance(n_estimators, list):
         n_estimators = n_estimators[0]

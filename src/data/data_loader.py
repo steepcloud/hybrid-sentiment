@@ -44,10 +44,10 @@ class SentimentDataset(Dataset):
         
         aug_sequence = sequence.copy()
         
-        # Random deletion (10% chance to delete each token)
+        # random deletion (10% chance to delete each token)
         aug_sequence = [token for token in aug_sequence if random.random() > 0.1]
         
-        # Random swap (swap adjacent tokens with 10% chance)
+        # random swap (swap adjacent tokens with 10% chance)
         for i in range(len(aug_sequence) - 1):
             if random.random() < 0.1:
                 aug_sequence[i], aug_sequence[i + 1] = aug_sequence[i + 1], aug_sequence[i]
@@ -58,11 +58,11 @@ class SentimentDataset(Dataset):
         sequence = self.sequences[idx]
         label = self.labels[idx]
         
-        # Apply augmentation if enabled
+        # apply augmentation if enabled
         if self.augment:
             sequence = self._augment_sequence(sequence)
         
-        # Pad or truncate
+        # pad or truncate
         if len(sequence) < self.max_length:
             sequence = sequence + [0] * (self.max_length - len(sequence))
         else:
@@ -88,12 +88,12 @@ class DatasetLoader:
         self.data_config = self.config['data']
         self.random_seed = self.config['project']['random_seed']
 
-        # Create directories
+        # create dirs if not exist
         os.makedirs(self.data_config['data_dir'], exist_ok=True)
         os.makedirs(self.data_config['processed_dir'], exist_ok=True)
         os.makedirs(self.data_config['embeddings_dir'], exist_ok=True)
         
-        # Cache file path
+        # cache file path
         self.cache_file = os.path.join(
             self.data_config['processed_dir'], 
             f"{self.data_config['dataset_name']}_cache.pkl"
@@ -132,7 +132,7 @@ class DatasetLoader:
         Returns:
             Dictionary with statistics
         """
-        # Calculate text lengths
+        # calculate text lengths
         text_lengths = df['text'].apply(lambda x: len(x.split()))
         
         stats = {
@@ -152,7 +152,7 @@ class DatasetLoader:
             }
         }
         
-        # Print statistics
+        # print statistics
         print(f"\n{'='*60}")
         print(f"{split_name} Statistics")
         print(f"{'='*60}")
@@ -192,7 +192,7 @@ class DatasetLoader:
         print("Loading IMDb dataset...")
         dataset = load_dataset("imdb")
         
-        # Convert to DataFrame
+        # convert to DataFrame
         train_data = pd.DataFrame({
             'text': dataset['train']['text'],
             'label': dataset['train']['label']
@@ -203,7 +203,7 @@ class DatasetLoader:
             'label': dataset['test']['label']
         })
         
-        # Split train into train and validation
+        # split train into train and validation
         val_split = self.data_config['validation_split']
         train_df, val_df = train_test_split(
             train_data, 
@@ -212,7 +212,7 @@ class DatasetLoader:
             stratify=train_data['label']
         )
         
-        # Sample if specified
+        # sample if specified
         sample_size = self.data_config.get('sample_size')
         if sample_size is not None:
             train_df = train_df.sample(n=min(sample_size, len(train_df)), random_state=self.random_seed)
@@ -223,7 +223,7 @@ class DatasetLoader:
         val_df = val_df.reset_index(drop=True)
         test_df = test_df.reset_index(drop=True)
         
-        # Cache the dataset
+        # cache the dataset
         if use_cache:
             self._save_to_cache(train_df, val_df, test_df)
         
@@ -241,7 +241,7 @@ class DatasetLoader:
         Returns:
             train_df, val_df, test_df
         """
-        # Use dataset-specific cache file
+        # use dataset-specific cache file
         cache_file = os.path.join(self.data_config['processed_dir'], 'twitter_cache.pkl')
         
         if use_cache and os.path.exists(cache_file):
@@ -252,10 +252,10 @@ class DatasetLoader:
         
         print("Loading Twitter tweet_eval sentiment dataset...")
         
-        # Use tweet_eval/sentiment (more modern, ~60k tweets)
+        # use tweet_eval/sentiment (more modern, ~60k tweets)
         dataset = load_dataset("tweet_eval", "sentiment")
         
-        # Combine all splits
+        # combine all splits
         all_data = []
         for split_name in ['train', 'validation', 'test']:
             split_df = pd.DataFrame({
@@ -273,7 +273,7 @@ class DatasetLoader:
         
         print(f"Total tweets after removing neutral: {len(combined_df)}")
         
-        # Split into train, val, test
+        # split into train, val, test
         test_split = self.data_config['test_split']
         val_split = self.data_config['validation_split']
         
@@ -291,7 +291,7 @@ class DatasetLoader:
             stratify=train_val_df['label']
         )
         
-        # Sample if specified
+        # sample if specified
         sample_size = self.data_config.get('sample_size')
         if sample_size is not None:
             train_df = train_df.sample(n=min(sample_size, len(train_df)), random_state=self.random_seed)
@@ -302,7 +302,7 @@ class DatasetLoader:
         val_df = val_df.reset_index(drop=True)
         test_df = test_df.reset_index(drop=True)
         
-        # Cache the dataset
+        # cache the dataset
         if use_cache:
             cache_data = {
                 'train': train_df,
@@ -340,7 +340,7 @@ class DatasetLoader:
         if test_path:
             test_df = pd.read_csv(test_path)
             
-            # Split train into train and validation
+            # split train into train and validation
             val_split = self.data_config['validation_split']
             train_df, val_df = train_test_split(
                 train_data, 
@@ -349,7 +349,7 @@ class DatasetLoader:
                 stratify=train_data['label']
             )
         else:
-            # Split into train, val, test
+            # split into train, val, test
             test_split = self.data_config['test_split']
             val_split = self.data_config['validation_split']
             
@@ -371,7 +371,7 @@ class DatasetLoader:
         val_df = val_df.reset_index(drop=True)
         test_df = test_df.reset_index(drop=True)
         
-        # Cache the dataset
+        # cache the dataset
         if use_cache:
             self._save_to_cache(train_df, val_df, test_df)
         

@@ -1,5 +1,4 @@
 import numpy as np
-import pickle
 import os
 import yaml
 from sklearn.linear_model import LogisticRegression
@@ -39,7 +38,7 @@ class LogisticRegressionClassifier:
         self.random_state = random_state
         self.normalize = normalize
         
-        # Initialize model
+        # initialize model
         self.model = LogisticRegression(
             C=C,
             max_iter=max_iter,
@@ -47,13 +46,13 @@ class LogisticRegressionClassifier:
             penalty=penalty,
             class_weight=class_weight,
             random_state=random_state,
-            n_jobs=-1  # Use all CPU cores
+            n_jobs=-1  # use all CPU cores
         )
         
-        # Scaler for normalization
+        # scaler for normalization
         self.scaler = StandardScaler() if normalize else None
         
-        # Training info
+        # training info
         self.is_trained = False
         self.feature_dim = None
         self.classes = None
@@ -87,19 +86,19 @@ class LogisticRegressionClassifier:
         
         self.feature_dim = X_train.shape[1]
         
-        # Normalize features if specified
+        # normalize features if specified
         if self.normalize:
             X_train = self.scaler.fit_transform(X_train)
             if X_val is not None:
                 X_val = self.scaler.transform(X_val)
         
-        # Train model
+        # train model
         self.model.fit(X_train, y_train)
         
         self.is_trained = True
         self.classes = self.model.classes_
         
-        # Calculate metrics
+        # calculate metrics
         metrics = {
             'train_accuracy': self.model.score(X_train, y_train),
             'n_iterations': self.model.n_iter_[0] if hasattr(self.model, 'n_iter_') else None
@@ -130,7 +129,7 @@ class LogisticRegressionClassifier:
         if not self.is_trained:
             raise ValueError("Model not trained. Call fit() first.")
         
-        # Normalize if scaler exists
+        # normalize if scaler exists
         if self.scaler is not None:
             X = self.scaler.transform(X)
         
@@ -149,7 +148,7 @@ class LogisticRegressionClassifier:
         if not self.is_trained:
             raise ValueError("Model not trained. Call fit() first.")
         
-        # Normalize if scaler exists
+        # normalize if scaler exists
         if self.scaler is not None:
             X = self.scaler.transform(X)
         
@@ -169,7 +168,7 @@ class LogisticRegressionClassifier:
         if not self.is_trained:
             raise ValueError("Model not trained. Call fit() first.")
         
-        # Normalize if scaler exists
+        # normalize if scaler exists
         if self.scaler is not None:
             X = self.scaler.transform(X)
         
@@ -188,10 +187,10 @@ class LogisticRegressionClassifier:
         if not self.is_trained:
             raise ValueError("Model not trained. Call fit() first.")
         
-        # Get coefficients
+        # get coefficients
         coef = self.model.coef_[0]  # [feature_dim]
         
-        # Get indices sorted by absolute value
+        # get indices sorted by absolute value
         indices = np.argsort(np.abs(coef))[::-1][:top_n]
         values = coef[indices]
         

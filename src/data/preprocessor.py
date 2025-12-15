@@ -1,6 +1,6 @@
 import re
 import string
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
@@ -41,7 +41,7 @@ class TextPreprocessor:
         self.preprocess_config = self.config['preprocessing']
         self.data_config = self.config['data']
         
-        # Preprocessing settings
+        # preprocessing settings
         self.lowercase = self.preprocess_config['lowercase']
         self.remove_punctuation = self.preprocess_config['remove_punctuation']
         self.remove_stopwords = self.preprocess_config['remove_stopwords']
@@ -52,10 +52,10 @@ class TextPreprocessor:
         self.min_word_freq = self.preprocess_config['min_word_freq']
         self.tokenizer_type = self.preprocess_config['tokenizer']
         
-        # Vocabulary settings
+        # vocabulary settings
         self.max_vocab_size = self.data_config['vocab_size']
         
-        # Initialize stopwords
+        # initialize stopwords
         self.stop_words = set(stopwords.words('english')) if self.remove_stopwords else set()
         
         # Vocabulary
@@ -82,37 +82,37 @@ class TextPreprocessor:
         if not isinstance(text, str):
             text = str(text)
         
-        # Remove HTML tags
+        # remove HTML tags
         if self.remove_html:
             text = re.sub(r'<.*?>', '', text)
             text = re.sub(r'&[a-z]+;', '', text)  # Remove HTML entities like &nbsp;
         
-        # Remove URLs
+        # remove URLs
         if self.remove_urls:
             text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
         
-        # Remove mentions (for tweets)
+        # remove mentions (for tweets)
         if self.remove_mentions:
             text = re.sub(r'@\w+', '', text)
         
-        # Remove hashtags (for tweets)
+        # remove hashtags (for tweets)
         if self.remove_hashtags:
             text = re.sub(r'#\w+', '', text)
         else:
-            # Remove just the # symbol but keep the word
+            # remove just the # symbol but keep the word
             text = re.sub(r'#', '', text)
         
-        # Lowercase
+        # lowercase
         if self.lowercase:
             text = text.lower()
         
         text = re.sub(r'([.,!?;:\-\'\"])', r' \1 ', text)
 
-        # Remove punctuation
+        # remove punctuation
         if self.remove_punctuation:
             text = text.translate(str.maketrans('', '', string.punctuation))
         
-        # Remove extra whitespace
+        # remove extra whitespace
         text = ' '.join(text.split())
         
         return text
@@ -130,10 +130,10 @@ class TextPreprocessor:
         if self.tokenizer_type == 'word':
             tokens = word_tokenize(text)
         elif self.tokenizer_type == 'simple':
-            # Simple whitespace tokenization
+            # simple whitespace tokenization
             tokens = re.findall(r"\b\w+(?:'\w+)?\b", text)
         elif self.tokenizer_type == 'char':
-            # Character-level tokenization
+            # character-level tokenization
             tokens = list(text)
         else:
             raise ValueError(f"Unknown tokenizer type: {self.tokenizer_type}")
@@ -141,11 +141,11 @@ class TextPreprocessor:
         if self.lowercase:
             tokens = [token.lower() for token in tokens]
             
-        # Remove stopwords if configured
+        # remove stopwords if configured
         if self.remove_stopwords:
             tokens = [token for token in tokens if token.lower() not in self.stop_words]
         
-        # Remove empty tokens
+        # remove empty tokens
         tokens = [token for token in tokens if token.strip() and not all(c in string.punctuation for c in token)]
         
         return tokens
@@ -163,42 +163,42 @@ class TextPreprocessor:
         """
         print("Building vocabulary...")
         
-        # Count word frequencies
+        # count word frequencies
         for text in texts:
             cleaned = self.clean_text(text)
             tokens = self.tokenize(cleaned)
             self.word_freq.update(tokens)
         
-        # Filter by minimum frequency
+        # filter by minimum frequency
         filtered_words = [
             word for word, freq in self.word_freq.items() 
             if freq >= self.min_word_freq
         ]
         
-        # Sort by frequency (most common first)
+        # sort by frequency (most common first)
         sorted_words = sorted(
             filtered_words, 
             key=lambda w: self.word_freq[w], 
             reverse=True
         )
         
-        # Limit vocabulary size
+        # limit vocabulary size
         if self.max_vocab_size:
             sorted_words = sorted_words[:self.max_vocab_size - 2]  # -2 for PAD and UNK
         
-        # Build vocabulary
+        # build vocabulary
         self.vocab = {self.PAD_TOKEN: self.PAD_IDX, self.UNK_TOKEN: self.UNK_IDX}
         
         for idx, word in enumerate(sorted_words, start=2):
             self.vocab[word] = idx
         
-        # Build reverse vocabulary
+        # build reverse vocabulary
         self.idx_to_word = {idx: word for word, idx in self.vocab.items()}
         
         print(f"Vocabulary size: {len(self.vocab)}")
         print(f"Most common words: {sorted_words[:10]}")
         
-        # Save vocabulary if path provided
+        # save vocabulary if path provided
         if save_path:
             self.save_vocab(save_path)
         
@@ -217,7 +217,7 @@ class TextPreprocessor:
         cleaned = self.clean_text(text)
         tokens = self.tokenize(cleaned)
         
-        # Convert tokens to indices
+        # convert tokens to indices
         sequence = [self.vocab.get(token, self.UNK_IDX) for token in tokens]
         
         return sequence
@@ -233,7 +233,7 @@ class TextPreprocessor:
             Text string
         """
         tokens = [self.idx_to_word.get(idx, self.UNK_TOKEN) for idx in sequence]
-        # Remove padding tokens
+        # remove padding tokens
         tokens = [token for token in tokens if token != self.PAD_TOKEN]
         return ' '.join(tokens)
     
@@ -283,14 +283,14 @@ class TextPreprocessor:
             if len(seq) == 0:
                 continue
             
-            # Truncate if necessary
+            # truncate if necessary
             if len(seq) > max_length:
                 if truncating == 'post':
                     seq = seq[:max_length]
                 else:  # 'pre'
                     seq = seq[-max_length:]
             
-            # Pad if necessary
+            # pad if necessary
             if padding == 'post':
                 padded[i, :len(seq)] = seq
             else:  # 'pre'
@@ -344,7 +344,7 @@ class TextPreprocessor:
         self.idx_to_word = vocab_data['idx_to_word']
         self.word_freq = Counter(vocab_data['word_freq'])
         
-        # Load config (optional - can override current settings)
+        # load config (optional - can override current settings)
         config = vocab_data['config']
         self.lowercase = config.get('lowercase', self.lowercase)
         self.remove_punctuation = config.get('remove_punctuation', self.remove_punctuation)

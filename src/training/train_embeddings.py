@@ -1,12 +1,10 @@
 import numpy as np
 import os
 import sys
-import yaml
 import argparse
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from datetime import datetime
-import pickle
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
@@ -30,18 +28,18 @@ class EmbeddingTrainer:
             config_path: Path to configuration file
             embedding_type: Type of embedding ('word2vec', 'glove', etc.)
         """
-        # Load config
+        # load config
         self.config = Config(config_path)
         self.embedding_type = embedding_type
         
-        # Set random seed
+        # set random seed
         set_seed(self.config.get('project.random_seed', 42))
         
-        # Initialize components
+        # initialize components
         self.data_loader = DatasetLoader()
         self.preprocessor = TextPreprocessor()
         
-        # Set vocab size from config
+        # set vocab size from config
         self.preprocessor.max_vocab_size = self.config.get('data.vocab_size', 20000)
         self.preprocessor.max_length = self.config.get('data.max_length', 512)
         
@@ -68,7 +66,7 @@ class EmbeddingTrainer:
         print("\nPreparing corpus...")
         print(f"  Total texts: {len(texts)}")
         
-        # Build vocabulary
+        # build vocabulary
         print("  Building vocabulary...")
         self.preprocessor.build_vocab(texts)
         
@@ -77,13 +75,13 @@ class EmbeddingTrainer:
             os.makedirs(os.path.dirname(vocab_path), exist_ok=True)
             self.preprocessor.save_vocab(vocab_path)
         
-        # Tokenize all texts
+        # tokenize all texts
         print("  Tokenizing texts...")
         corpus = []
         for i, text in enumerate(texts):
             cleaned = self.preprocessor.clean_text(text)
             tokens = self.preprocessor.tokenize(cleaned)
-            if tokens:  # Only add non-empty token lists
+            if tokens:  # only add non-empty token lists
                 corpus.append(tokens)
             
             if (i + 1) % 5000 == 0:
@@ -113,20 +111,20 @@ class EmbeddingTrainer:
         print("Training Word2Vec Embeddings")
         print("="*60)
         
-        # Create Word2Vec model from config
+        # create Word2Vec model from config
         self.embedding_model = create_word2vec_from_config()
         
-        # Train
+        # train
         self.embedding_model.train(corpus, save_path=None)
         
-        # Get statistics
+        # get statistics
         stats = self.embedding_model.get_statistics()
         
         print(f"\n✓ Training complete!")
         print(f"  Vocabulary size: {stats['vocab_size']}")
         print(f"  Embedding dimension: {stats['embedding_dim']}")
         
-        # Save model
+        # save model
         if save_model:
             save_dir = f"results/embeddings/{self.embedding_type}"
             os.makedirs(save_dir, exist_ok=True)
@@ -156,7 +154,7 @@ class EmbeddingTrainer:
         if self.embedding_model is None:
             raise ValueError("No embedding model trained")
         
-        # Default test words
+        # default test words
         if test_words is None:
             test_words = [
                 'good', 'bad', 'excellent', 'terrible', 'love', 'hate',
@@ -165,7 +163,7 @@ class EmbeddingTrainer:
         
         results = {}
         
-        # Test word similarities
+        # test word similarities
         print("\nWord Similarities:")
         for word in test_words:
             similar = self.embedding_model.most_similar(word, topn=5)
@@ -178,7 +176,7 @@ class EmbeddingTrainer:
                 print(f"\n  '{word}' not in vocabulary")
                 results[word] = []
         
-        # Test word similarities between pairs
+        # test word similarities between pairs
         print("\n" + "-"*60)
         print("Word Pair Similarities:")
         
@@ -195,7 +193,7 @@ class EmbeddingTrainer:
             sim = self.embedding_model.similarity(word1, word2)
             print(f"  {word1} <-> {word2}: {sim:.4f}")
         
-        # Test sentiment-related words
+        # test sentiment-related words
         print("\n" + "-"*60)
         print("Sentiment Word Clusters:")
         
@@ -208,7 +206,7 @@ class EmbeddingTrainer:
             print(f"\n  {sentiment.upper()} words:")
             available_words = [w for w in words if self.embedding_model.get_word_vector(w) is not None]
             if len(available_words) >= 2:
-                # Compute average pairwise similarity
+                # compute average pairwise similarity
                 similarities = []
                 for i, w1 in enumerate(available_words):
                     for w2 in available_words[i+1:]:
@@ -244,11 +242,11 @@ class EmbeddingTrainer:
         print(f"Training Embeddings on {dataset.upper()}")
         print(f"{'='*60}")
         
-        # Load data
+        # load data
         print("\nLoading dataset...")
         train_df, val_df, test_df = self.data_loader.load_dataset(dataset, use_cache=True)
         
-        # Combine all texts for training embeddings
+        # combine all texts for training embeddings
         all_texts = (
             train_df['text'].tolist() +
             val_df['text'].tolist() +
@@ -257,22 +255,22 @@ class EmbeddingTrainer:
         
         print(f"Total texts for training: {len(all_texts)}")
         
-        # Prepare corpus
+        # prepare corpus
         corpus = self.prepare_corpus(all_texts, save_vocab=True)
         
-        # Train embeddings based on type
+        # train embeddings based on type
         if self.embedding_type == 'word2vec':
             self.train_word2vec(corpus, save_model=save_model)
         else:
             raise ValueError(f"Unknown embedding type: {self.embedding_type}")
         
-        # Evaluate
+        # evaluate
         results = {}
         if evaluate:
             eval_results = self.evaluate_embeddings()
             results['evaluation'] = eval_results
         
-        # Save metadata
+        # save metadata
         results['metadata'] = {
             'dataset': dataset,
             'embedding_type': self.embedding_type,
@@ -282,7 +280,7 @@ class EmbeddingTrainer:
             'timestamp': datetime.now().strftime("%Y%m%d_%H%M%S")
         }
         
-        # Save results
+        # save results
         results_path = f"results/embeddings/{self.embedding_type}/training_results.pkl"
         save_results(results, results_path)
         
@@ -304,13 +302,13 @@ def main():
     
     args = parser.parse_args()
     
-    # Create trainer
+    # create trainer
     trainer = EmbeddingTrainer(
         config_path=args.config,
         embedding_type=args.embedding
     )
     
-    # Train embeddings
+    # train embeddings
     results = trainer.train_on_dataset(
         dataset=args.dataset,
         save_model=not args.no_save,

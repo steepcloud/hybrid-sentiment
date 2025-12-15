@@ -5,22 +5,19 @@ from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 import os
 import sys
-import yaml
 import argparse
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
-from datetime import datetime
+from typing import Dict, List
 from tqdm import tqdm
 
-# Add project root to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.data.data_loader import DatasetLoader
 from src.data.preprocessor import TextPreprocessor
-from src.models.deep_learning.lstm_encoder import LSTMClassifier, create_lstm_classifier_from_config
-from src.models.deep_learning.gru_encoder import GRUClassifier, create_gru_classifier_from_config
-from src.models.deep_learning.transformer_encoder import TransformerClassifier, create_transformer_classifier_from_config
-from src.models.deep_learning.bert_encoder import BERTClassifier, create_bert_classifier_from_config
+from src.models.deep_learning.lstm_encoder import create_lstm_classifier_from_config
+from src.models.deep_learning.gru_encoder import create_gru_classifier_from_config
+from src.models.deep_learning.transformer_encoder import create_transformer_classifier_from_config
+from src.models.deep_learning.bert_encoder import create_bert_classifier_from_config
 from src.evaluation.metrics import calculate_metrics, print_metrics
 from src.utils.helpers import set_seed, save_checkpoint, format_time, get_device, count_parameters
 from src.utils.config import Config
@@ -39,21 +36,21 @@ class EndToEndDLTrainer:
             config_path: Path to configuration file
             model_type: Type of model ('lstm', 'gru', 'transformer', 'bert')
         """
-        # Load config
+        # load config
         self.config = Config(config_path)
         self.model_type = model_type
         
-        # Set random seed
+        # set random seed
         set_seed(self.config.get('project.random_seed', 42))
         
-        # Get device
+        # get device
         self.device = get_device()
         
-        # Initialize components
+        # initialize components
         self.data_loader = DatasetLoader()
         self.preprocessor = TextPreprocessor()
         
-        # Set vocab size from config
+        # set vocab size from config
         self.preprocessor.max_vocab_size = self.config.get('data.vocab_size', 20000)
         self.preprocessor.max_length = self.config.get('data.max_length', 512)
         
@@ -84,7 +81,7 @@ class EndToEndDLTrainer:
         """
 
         if self.model_type in ['bert', 'roberta', 'distilbert']:
-            # Use BERT tokenizer
+            # use BERT tokenizer
             model_name_map = {
                 'bert': 'bert-base-uncased',
                 'roberta': 'roberta-base',
@@ -95,7 +92,7 @@ class EndToEndDLTrainer:
             from transformers import AutoTokenizer
             tokenizer = AutoTokenizer.from_pretrained(model_name)
             
-            # Tokenize texts
+            # tokenize texts
             encodings = tokenizer(
                 texts,
                 truncation=True,
@@ -113,21 +110,21 @@ class EndToEndDLTrainer:
             
             return dataloader
     
-        # Tokenize and encode texts
+        # tokenize and encode texts
         input_ids_list = []
         lengths_list = []
         
         for text in texts:
             cleaned = self.preprocessor.clean_text(text)
             tokens = self.preprocessor.tokenize(cleaned)
-            # Convert tokens to IDs
+            # convert tokens to IDs
             ids = [self.preprocessor.vocab.get(token, self.preprocessor.UNK_IDX) 
                    for token in tokens]
             
             input_ids_list.append(ids)
             lengths_list.append(len(ids))
         
-        # Pad sequences
+        # pad sequences
         max_len = self.config.get('data.max_length', 512)
         padded_ids = np.zeros((len(input_ids_list), max_len), dtype=np.int64)
         
@@ -135,12 +132,12 @@ class EndToEndDLTrainer:
             length = min(len(ids), max_len)
             padded_ids[i, :length] = ids[:length]
         
-        # Convert to tensors
+        # convert to tensors
         input_ids = torch.LongTensor(padded_ids)
         lengths = torch.LongTensor([min(l, max_len) for l in lengths_list])
         labels_tensor = torch.LongTensor(labels)
         
-        # Create dataset and dataloader
+        # create dataset and dataloader
         dataset = TensorDataset(input_ids, lengths, labels_tensor)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         
@@ -173,21 +170,21 @@ class EndToEndDLTrainer:
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
         
-        # Better weight initialization for classifier head
+        # better weight initialization for classifier head
         def init_classifier_weights(m):
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
         
-        # Apply to classifier only (not encoder/embeddings)
+        # apply to classifier only (not encoder/embeddings)
         if hasattr(model, 'classifier'):
             model.classifier.apply(init_classifier_weights)
             print("  ✓ Applied Xavier initialization to classifier")
             
         model = model.to(self.device)
         
-        # Print model info
+        # print model info
         total_params = count_parameters(model)
         print(f"  Total parameters: {total_params:,}")
         
@@ -217,7 +214,7 @@ class EndToEndDLTrainer:
         pbar = tqdm(train_loader, desc=f"Epoch {epoch}")
         
         for batch in pbar:
-            # Handle BERT vs traditional models
+            # handle BERT vs traditional models
             if self.model_type in ['bert', 'roberta', 'distilbert']:
                 input_ids, attention_mask, labels = batch
                 input_ids = input_ids.to(self.device)
@@ -241,21 +238,21 @@ class EndToEndDLTrainer:
             
             loss = self.criterion(logits, labels)
             
-            # Backward pass
+            # backward pass
             loss.backward()
             
-            # Gradient clipping
+            # gradient clipping
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             
             self.optimizer.step()
             
-            # Calculate accuracy
+            # calculate accuracy
             _, predicted = torch.max(logits, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
             total_loss += loss.item()
             
-            # Update progress bar
+            # update progress bar
             pbar.set_postfix({
                 'loss': f'{loss.item():.4f}',
                 'acc': f'{100 * correct / total:.2f}%'
@@ -297,7 +294,7 @@ class EndToEndDLTrainer:
                 lengths = lengths.to(self.device)
                 labels = labels.to(self.device)
                 
-                # Forward pass
+                # forward pass
                 if self.model_type == 'transformer':
                     logits = self.model(input_ids)
                 else:
@@ -306,7 +303,7 @@ class EndToEndDLTrainer:
                 loss = self.criterion(logits, labels)
                 total_loss += loss.item()
                 
-                # Get predictions
+                # get predictions
                 probs = torch.softmax(logits, dim=1)
                 _, predicted = torch.max(logits, 1)
                 
@@ -314,7 +311,7 @@ class EndToEndDLTrainer:
                 all_labels.extend(labels.cpu().numpy())
                 all_probs.extend(probs.cpu().numpy())
         
-        # Calculate metrics
+        # calculate metrics
         avg_loss = total_loss / len(eval_loader)
         
         all_preds = np.array(all_preds)
@@ -357,10 +354,10 @@ class EndToEndDLTrainer:
         print(f"  Learning rate: {learning_rate}")
         print(f"  Batch size: {train_loader.batch_size}")
         
-        # Setup optimizer
+        # setup optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
         
-        # Training history
+        # training history
         history = {
             'train_loss': [],
             'train_accuracy': [],
@@ -372,34 +369,34 @@ class EndToEndDLTrainer:
         best_val_f1 = 0
         best_epoch = 0
         
-        # Training loop
+        # training loop
         for epoch in range(1, num_epochs + 1):
             print(f"\n{'='*60}")
             print(f"Epoch {epoch}/{num_epochs}")
             print(f"{'='*60}")
             
-            # Train
+            # train
             train_metrics = self.train_epoch(train_loader, epoch)
             
             print(f"\nTraining - Loss: {train_metrics['loss']:.4f}, "
                   f"Accuracy: {train_metrics['accuracy']:.4f}")
             
-            # Validate
+            # validate
             val_metrics = self.evaluate(val_loader, "Validation")
             
-            # Update history
+            # update history
             history['train_loss'].append(train_metrics['loss'])
             history['train_accuracy'].append(train_metrics['accuracy'])
             history['val_loss'].append(val_metrics['loss'])
             history['val_accuracy'].append(val_metrics['accuracy'])
             history['val_f1'].append(val_metrics['f1'])
             
-            # Save best model
+            # save best model
             if val_metrics['f1'] > best_val_f1:
                 best_val_f1 = val_metrics['f1']
                 best_epoch = epoch
                 
-                # Save checkpoint
+                # save checkpoint
                 os.makedirs(save_dir, exist_ok=True)
                 checkpoint_path = os.path.join(save_dir, f"{self.model_type}_best.pt")
                 
@@ -446,19 +443,19 @@ class EndToEndDLTrainer:
         print(f"Training on {dataset.upper()} Dataset")
         print(f"{'='*60}")
         
-        # Load data
+        # load data
         print("\nLoading dataset...")
         train_df, val_df, test_df = self.data_loader.load_dataset(dataset, use_cache=True)
         
-        # Build vocabulary
+        # build vocabulary
         print("\nBuilding vocabulary...")
         self.preprocessor.build_vocab(train_df['text'].tolist())
         
-        # Create model
+        # create model
         vocab_size = len(self.preprocessor.vocab)
         self.model = self.create_model(vocab_size)
         
-        # Prepare data
+        # prepare data
         print("\nPreparing data loaders...")
         train_loader = self.prepare_data(
             train_df['text'].tolist(),
@@ -482,7 +479,7 @@ class EndToEndDLTrainer:
         print(f"  Val batches: {len(val_loader)}")
         print(f"  Test batches: {len(test_loader)}")
         
-        # Train
+        # train
         save_dir = f"results/models/deep_learning/{dataset}/{self.model_type}"
         history = self.train(
             train_loader,
@@ -492,7 +489,7 @@ class EndToEndDLTrainer:
             save_dir=save_dir
         )
         
-        # Load best model and evaluate on test set
+        # load best model and evaluate on test set
         print(f"\n{'='*60}")
         print("Evaluating best model on test set...")
         print(f"{'='*60}")
@@ -503,7 +500,7 @@ class EndToEndDLTrainer:
         
         test_metrics = self.evaluate(test_loader, "Test")
         
-        # Compile results
+        # compile results
         results = {
             'history': history,
             'test_metrics': test_metrics,
@@ -533,13 +530,13 @@ def main():
     
     args = parser.parse_args()
     
-    # Create trainer
+    # create trainer
     trainer = EndToEndDLTrainer(
         config_path=args.config,
         model_type=args.model
     )
     
-    # Train
+    # train
     results = trainer.train_on_dataset(
         dataset=args.dataset,
         batch_size=args.batch_size,

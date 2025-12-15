@@ -70,7 +70,7 @@ class Word2VecTrainer:
         print(f"  Epochs: {self.epochs}")
         print(f"  Total sentences: {len(sentences)}")
         
-        # Train Word2Vec model
+        # train Word2Vec model
         self.model = Word2Vec(
             sentences=sentences,
             vector_size=self.embedding_dim,
@@ -86,11 +86,11 @@ class Word2VecTrainer:
         self.vocab_size = len(self.model.wv)
         print(f"  Vocabulary size: {self.vocab_size}")
         
-        # Build word-to-index mapping
+        # build word-to-index mapping
         self.word_to_idx = {word: idx for idx, word in enumerate(self.model.wv.index_to_key)}
         self.idx_to_word = {idx: word for word, idx in self.word_to_idx.items()}
         
-        # Save model if path provided
+        # save model if path provided
         if save_path:
             self.save_model(save_path)
         
@@ -119,11 +119,11 @@ class Word2VecTrainer:
         vocab_size = len(vocab)
         embedding_matrix = np.zeros((vocab_size, self.embedding_dim))
         
-        # Initialize with random values for PAD and UNK
+        # initialize with random values for PAD and UNK
         embedding_matrix[pad_idx] = np.zeros(self.embedding_dim)  # PAD is zeros
         embedding_matrix[unk_idx] = np.random.randn(self.embedding_dim) * 0.01  # UNK is small random
         
-        # Fill in embeddings for words in vocabulary
+        # fill in embeddings for words in vocabulary
         found_words = 0
         for word, idx in vocab.items():
             if word in self.model.wv:
@@ -188,11 +188,11 @@ class Word2VecTrainer:
         """
         os.makedirs(os.path.dirname(path), exist_ok=True)
         
-        # Save Gensim model
+        # save Gensim model
         model_path = path.replace('.pkl', '.model')
         self.model.save(model_path)
         
-        # Save metadata
+        # save metadata
         metadata = {
             'embedding_dim': self.embedding_dim,
             'vocab_size': self.vocab_size,
@@ -220,11 +220,11 @@ class Word2VecTrainer:
         Args:
             path: Path to model file
         """
-        # Load Gensim model
+        # load Gensim model
         model_path = path.replace('.pkl', '.model')
         self.model = Word2Vec.load(model_path)
         
-        # Load metadata
+        # load metadata
         with open(path, 'rb') as f:
             metadata = pickle.load(f)
         
@@ -319,7 +319,6 @@ def create_word2vec_from_config(config_path: str = "configs/config.yaml") -> Wor
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    # Get Word2Vec settings (you'll need to add this to config.yaml)
     word_emb_config = config.get('word_embeddings', {})
     
     trainer = Word2VecTrainer(

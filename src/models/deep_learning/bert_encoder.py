@@ -28,20 +28,20 @@ class BERTEncoder(nn.Module):
         self.model_name = model_name
         self.max_length = max_length
         
-        # Load pre-trained model
+        # load pre-trained model
         self.bert = AutoModel.from_pretrained(model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         
-        # Freeze BERT parameters if specified
+        # freeze BERT parameters if specified
         if freeze_bert:
             for param in self.bert.parameters():
                 param.requires_grad = False
         
-        # Get hidden size from model config
+        # get hidden size from model config
         config = AutoConfig.from_pretrained(model_name)
         hidden_size = config.hidden_size
         
-        # Classification head
+        # classification head
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(hidden_size, num_classes)
         
@@ -68,13 +68,13 @@ class BERTEncoder(nn.Module):
             attention_mask=attention_mask
         )
         
-        # Get [CLS] token embedding (first token)
+        # get [CLS] token embedding (first token)
         cls_embedding = outputs.last_hidden_state[:, 0, :]
         
         if return_embeddings:
             return cls_embedding
         
-        # Classification
+        # classification
         pooled = self.dropout(cls_embedding)
         logits = self.classifier(pooled)
         

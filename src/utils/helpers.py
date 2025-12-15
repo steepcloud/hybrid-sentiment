@@ -46,7 +46,6 @@ def save_results(
         with open(save_path, 'wb') as f:
             pickle.dump(results, f)
     elif format == 'json':
-        # Convert numpy types to native Python types
         results_json = convert_to_json_serializable(results)
         with open(save_path, 'w') as f:
             json.dump(results_json, f, indent=2)
@@ -241,14 +240,14 @@ def load_checkpoint(
 
 
 if __name__ == "__main__":
-    # Test helpers
+    # test helpers
     print("Testing helper functions...")
     
-    # Test set_seed
+    # test set_seed
     print("\n" + "="*60)
     set_seed(42)
     
-    # Test save/load results
+    # test save/load results
     print("\n" + "="*60)
     test_results = {
         'accuracy': 0.95,
@@ -264,20 +263,20 @@ if __name__ == "__main__":
     loaded_results = load_results('results/test/test_results.pkl', format='pickle')
     print(f"Loaded results: {loaded_results}")
     
-    # Test JSON serialization
+    # test JSON serialization
     save_results(test_results, 'results/test/test_results.json', format='json')
     
-    # Test device
+    # test device
     print("\n" + "="*60)
     device = get_device()
     
-    # Test time formatting
+    # test time formatting
     print("\n" + "="*60)
     print(f"Format 3661 seconds: {format_time(3661)}")
     print(f"Format 125 seconds: {format_time(125)}")
     print(f"Format 45 seconds: {format_time(45)}")
     
-    # Test experiment directory
+    # test experiment directory
     print("\n" + "="*60)
     exp_dir = create_experiment_dir('results/test_experiments')
     
