@@ -1,0 +1,195 @@
+.inference {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 2rem;
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  color: #333;
+}
+
+.sidebar {
+  border-right: 2px solid #eee;
+  padding-right: 2rem;
+}
+
+.sidebar h3 {
+  margin-bottom: 1.5rem;
+  color: #667eea;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #555;
+}
+
+.form-group select {
+  width: 100%;
+  padding: 0.6rem;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.form-group select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.examples {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 2px solid #eee;
+}
+
+.examples p {
+  margin-bottom: 1rem;
+  color: #555;
+}
+
+.examples button {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.5rem;
+  padding: 0.6rem;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.examples button:hover {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.main-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.main-panel h3 {
+  margin-bottom: 1rem;
+  color: #667eea;
+}
+
+.main-panel textarea {
+  width: 100%;
+  padding: 1rem;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  margin-bottom: 1rem;
+  transition: border-color 0.3s;
+}
+
+.main-panel textarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.predict-btn {
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.predict-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+}
+
+.predict-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #fee;
+  border-left: 4px solid #f44;
+  border-radius: 4px;
+  color: #c00;
+}
+
+.result {
+  margin-top: 2rem;
+  padding: 2rem;
+  border-radius: 12px;
+  animation: slideIn 0.3s ease;
+}
+
+.result.positive {
+  background: linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%);
+  border: 2px solid #4caf50;
+}
+
+.result.negative {
+  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  border: 2px solid #f44336;
+}
+
+.result h3 {
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.result-row:last-child {
+  border-bottom: none;
+}
+
+.result-row strong {
+  font-size: 1.2rem;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .inference {
+    grid-template-columns: 1fr;
+  }
+  
+  .sidebar {
+    border-right: none;
+    border-bottom: 2px solid #eee;
+    padding-right: 0;
+    padding-bottom: 2rem;
+  }
+}
