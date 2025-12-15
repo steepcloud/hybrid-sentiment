@@ -48,6 +48,8 @@ results/models/*
 !results/models/.gitkeep
 
 # Results and outputs
+results/*
+!results/.gitkeep
 results/plots/*
 results/metrics/*
 !results/plots/.gitkeep
@@ -85,3 +87,9 @@ tmp/
 *.parquet
 !sample*.csv
 !sample*.json
+
+# Node modules
+node_modules/
+
+# Rust/Tauri
+src-tauri/target/
